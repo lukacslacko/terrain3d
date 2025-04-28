@@ -1,4 +1,4 @@
-use bevy::{asset::RenderAssetUsages, prelude::*, render::Render};
+use bevy::{asset::RenderAssetUsages, prelude::*};
 
 pub fn init() {
     App::new()
@@ -49,7 +49,7 @@ fn make_cube() -> Mesh {
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
     mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
     mesh.insert_indices(bevy::render::mesh::Indices::U32(indices));
-    return mesh;
+    mesh
 }
 
 fn startup(
