@@ -10,7 +10,7 @@ pub fn init() {
         .add_plugins((DefaultPlugins, MeshPickingPlugin))
         .add_systems(Startup, startup)
         .add_systems(
-            Update,
+            FixedUpdate,
             rotate_on_drag.run_if(input_pressed(MouseButton::Left)),
         )
         .run();
@@ -32,10 +32,13 @@ fn make_globe(n: u32) -> Mesh {
         frequency: 1.0,
         lacunarity: 2.13,
         persistence: 0.5,
-        octaves: 4,
+        octaves: 6,
     };
 
+    println!("Making globe");
+
     for face in 0..6 {
+        println!("Making face {}", face);
         for i in 0..m {
             for j in 0..m {
                 let u = i as f32 / n as f32;
@@ -144,6 +147,8 @@ fn make_globe(n: u32) -> Mesh {
         }
     }
 
+    println!("Making mesh.");
+
     let mut mesh = Mesh::new(
         bevy::render::mesh::PrimitiveTopology::TriangleList,
         RenderAssetUsages::RENDER_WORLD | RenderAssetUsages::MAIN_WORLD,
@@ -160,13 +165,15 @@ fn startup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let cube = meshes.add(make_globe(100));
+    let cube = meshes.add(make_globe(256));
     let material = materials.add(StandardMaterial {
         base_color: Color::WHITE,
         perceptual_roughness: 0.0,
         metallic: 0.0,
         ..default()
     });
+
+    println!("Spawning globe.");
 
     commands.spawn((
         Mesh3d(cube),
@@ -175,12 +182,14 @@ fn startup(
         Globe,
     ));
 
+    println!("Globe spawned.");
+
     commands.spawn((
         PointLight {
             shadows_enabled: true,
             intensity: 10_000_000.0,
             range: 100.0,
-            shadow_depth_bias: 0.2,
+            // shadow_depth_bias: 0.2,
             ..default()
         },
         Transform::from_xyz(0.0, 5.0, 20.0),
@@ -196,8 +205,11 @@ fn rotate_on_drag(
     mut motion_event_reader: EventReader<MouseMotion>,
     mut transform: Single<(&mut Transform, &Globe)>,
 ) {
-    for event in motion_event_reader.read() {
-        transform.0.rotate_x(-event.delta.y * 0.005);
-        transform.0.rotate_y(-event.delta.x * 0.005);
-    }
+    let (delta_x, delta_y) = motion_event_reader
+        .read()
+        .fold((0.0, 0.0), |(x, y), event| {
+            (x + event.delta.x, y + event.delta.y)
+        });
+    transform.0.rotate_x(-delta_y * 0.005);
+    transform.0.rotate_y(-delta_x * 0.005);
 }
