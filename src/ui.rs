@@ -1,3 +1,4 @@
+use crate::perlin::Perlin;
 use bevy::{
     asset::RenderAssetUsages,
     input::{common_conditions::*, mouse::*},
@@ -26,6 +27,14 @@ fn make_globe(n: u32) -> Mesh {
 
     let m = n + 1;
 
+    let perlin = Perlin {
+        seed: 0,
+        frequency: 1.0,
+        lacunarity: 2.13,
+        persistence: 0.5,
+        octaves: 4,
+    };
+
     for face in 0..6 {
         for i in 0..m {
             for j in 0..m {
@@ -46,7 +55,22 @@ fn make_globe(n: u32) -> Mesh {
                 };
                 let nr = 5.0;
                 let pos = [nx * nr, ny * nr, nz * nr];
-                let color = [u, v, (1 + face) as f32 / 8.0, 1.0];
+                // let color = [u, v, (1 + face) as f32 / 8.0, 1.0];
+                let noise = perlin.noise(nx, ny, nz) * 5.0;
+                use std::f32::consts::PI;
+                use std::ops::Add;
+                trait Scalable where Self: Add<f32, Output = f32> + Copy {
+                    fn scale(&self) -> f32 {
+                        (*self + 1.0) / 2.0
+                    }
+                }
+                impl Scalable for f32 {}
+                let color = [
+                    noise.sin().scale(),
+                    (noise + 2.0 * PI / 3.0).sin().scale(),
+                    (noise + 4.0 * PI / 3.0).sin().scale(),
+                    1.0,
+                ];
                 positions.push(pos);
                 colors.push(color);
                 normals.push([nx, ny, nz]);
@@ -79,7 +103,7 @@ fn startup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let cube = meshes.add(make_globe(10));
+    let cube = meshes.add(make_globe(100));
     let material = materials.add(StandardMaterial {
         base_color: Color::WHITE,
         perceptual_roughness: 0.0,

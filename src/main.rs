@@ -1,3 +1,4 @@
+mod perlin;
 mod ui;
 
 fn main() {
