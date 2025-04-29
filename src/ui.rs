@@ -40,23 +40,55 @@ fn make_globe(n: u32) -> Mesh {
             for j in 0..m {
                 let u = i as f32 / n as f32;
                 let v = j as f32 / n as f32;
-                let x = u - 0.5;
-                let y = v - 0.5;
-                let z = 0.5;
-                let r = (x * x + y * y + z * z).sqrt();
-                let (nx, ny, nz) = match face {
-                    0 => (x / r, y / r, z / r),
-                    1 => (-x / r, y / r, -z / r),
-                    2 => (z / r, y / r, -x / r),
-                    3 => (-z / r, y / r, x / r),
-                    4 => (x / r, z / r, -y / r),
-                    5 => (x / r, -z / r, y / r),
-                    _ => unreachable!(),
+                let sphere = |u: f32, v: f32| {
+                    let x = u - 0.5;
+                    let y = v - 0.5;
+                    let z = 0.5;
+                    let r = (x * x + y * y + z * z).sqrt();
+                    match face {
+                        0 => (x / r, y / r, z / r),
+                        1 => (-x / r, y / r, -z / r),
+                        2 => (z / r, y / r, -x / r),
+                        3 => (-z / r, y / r, x / r),
+                        4 => (x / r, z / r, -y / r),
+                        5 => (x / r, -z / r, y / r),
+                        _ => unreachable!(),
+                    }
                 };
-                let nr = 5.0;
-                let pos = [nx * nr, ny * nr, nz * nr];
-                // let color = [u, v, (1 + face) as f32 / 8.0, 1.0];
-                let noise = perlin.noise(nx, ny, nz) * 5.0;
+                let surface = |u, v| {
+                    let (nx, ny, nz) = sphere(u, v);
+                    let nr = 5.0;
+                    // let color = [u, v, (1 + face) as f32 / 8.0, 1.0];
+                    let noise = perlin.noise(nx, ny, nz) * 5.0;
+                    (noise, [nx * (nr + noise), ny * (nr + noise), nz * (nr + noise)])
+                };
+                let normvec = |u, v| {
+                    let (_, p) = surface(u, v);
+                    let (_, q) = surface(u + 0.01, v);
+                    let (_, r) = surface(u, v + 0.01);
+                    let a = [
+                        p[0] - q[0],
+                        p[1] - q[1],
+                        p[2] - q[2],
+                    ];
+                    let b = [
+                        p[0] - r[0],
+                        p[1] - r[1],
+                        p[2] - r[2],
+                    ];
+                    let n = [
+                        a[1] * b[2] - a[2] * b[1],
+                        a[2] * b[0] - a[0] * b[2],
+                        a[0] * b[1] - a[1] * b[0],
+                    ];
+                    let r = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+                    [
+                        n[0] / r,
+                        n[1] / r,
+                        n[2] / r,
+                    ]
+                };
+                let (noise, pos) = surface(u, v);
                 use std::f32::consts::PI;
                 use std::ops::Add;
                 trait Scalable where Self: Add<f32, Output = f32> + Copy {
@@ -73,7 +105,7 @@ fn make_globe(n: u32) -> Mesh {
                 ];
                 positions.push(pos);
                 colors.push(color);
-                normals.push([nx, ny, nz]);
+                normals.push(normvec(u, v));
             }
         }
         for i in 0..n {
