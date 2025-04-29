@@ -1,41 +1,55 @@
-use bevy::{asset::RenderAssetUsages, prelude::*};
+use bevy::{
+    asset::RenderAssetUsages,
+    input::{common_conditions::*, mouse::*},
+    prelude::*,
+};
 
 pub fn init() {
     App::new()
         .add_plugins((DefaultPlugins, MeshPickingPlugin))
         .add_systems(Startup, startup)
+        .add_systems(
+            Update,
+            rotate_on_drag.run_if(input_pressed(MouseButton::Left)),
+        )
         .run();
 }
 
 #[derive(Component)]
 struct MyCube;
 
-fn make_cube() -> Mesh {
+fn make_cube(n: u32) -> Mesh {
     let mut positions = Vec::new();
     let mut colors = Vec::new();
     let mut normals = Vec::new();
-    let mut uvs = Vec::new();
     let mut indices = Vec::new();
 
-    for i in 0..=10 {
-        for j in 0..=10 {
-            let u = i as f32 / 2.0;
-            let v = j as f32 / 2.0;
-            let pos = [u, v, 5.0];
+    for i in 0..=n {
+        for j in 0..=n {
+            let u = i as f32 / n as f32;
+            let v = j as f32 / n as f32;
+            let x = u - 0.5;
+            let y = v - 0.5;
+            let z = 0.5;
+            let r = (x * x + y * y + z * z).sqrt();
+            let nx = x / r;
+            let ny = y / r;
+            let nz = z / r;
+            let nr = 5.0;
+            let pos = [nx * nr, ny * nr, nz * nr];
             let color = [u, v, 0.5, 1.0];
             positions.push(pos);
             colors.push(color);
-            normals.push([0.0, 0.0, 1.0]);
-            uvs.push([u, v]);
+            normals.push([nx, ny, nz]);
         }
     }
 
-    for i in 0..10 {
-        for j in 0..10 {
-            let a = i + 11 * j;
+    for i in 0..n {
+        for j in 0..n {
+            let a = i + (n + 1) * j;
             let b = a + 1;
-            let c = a + 12;
-            let d = a + 11;
+            let c = a + (n + 2);
+            let d = a + (n + 1);
             indices.extend([b, a, c, d, c, a]);
         }
     }
@@ -47,7 +61,6 @@ fn make_cube() -> Mesh {
     mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, positions);
     mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
-    mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, uvs);
     mesh.insert_indices(bevy::render::mesh::Indices::U32(indices));
     mesh
 }
@@ -57,11 +70,17 @@ fn startup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let cube = meshes.add(make_cube());
+    let cube = meshes.add(make_cube(10));
+    let material = materials.add(StandardMaterial {
+        base_color: Color::WHITE,
+        perceptual_roughness: 0.0,
+        metallic: 0.0,
+        ..default()
+    });
 
     commands.spawn((
         Mesh3d(cube),
-        MeshMaterial3d(materials.add(Color::WHITE).clone()),
+        MeshMaterial3d(material),
         Transform::from_xyz(0.0, 0.0, 0.0),
         MyCube,
     ));
@@ -79,6 +98,16 @@ fn startup(
 
     commands.spawn((
         Camera3d::default(),
-        Transform::from_xyz(10.0, 11.0, 12.0).looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Z),
+        Transform::from_xyz(0.0, 11.0, 12.0).looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Z),
     ));
+}
+
+fn rotate_on_drag(
+    mut motion_event_reader: EventReader<MouseMotion>,
+    mut transform: Single<(&mut Transform, &MyCube)>,
+) {
+    for event in motion_event_reader.read() {
+        transform.0.rotate_x(event.delta.x * 0.01);
+        transform.0.rotate_y(event.delta.y * 0.01);
+    }
 }
