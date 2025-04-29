@@ -59,7 +59,6 @@ impl Perlin {
             let (a, b, c) = randvec(h);
             a * x + b * y + c * z
         };
-        let lerp = |t: f32, a: f32, b: f32| a + t * (b - a);
 
         let hash = |x: i32, y: i32, z: i32| {
             let mut a = x as u32;
@@ -97,22 +96,32 @@ impl Perlin {
         let v = fade(yf);
         let w = fade(zf);
 
-        let xaa = lerp(u, grad(aaa, xf, yf, zf), grad(baa, xf - 1.0, yf, zf));
-        let xab = lerp(u, grad(aab, xf, yf, zf), grad(bab, xf - 1.0, yf, zf));
-        let xba = lerp(
-            u,
-            grad(aba, xf, yf - 1.0, zf),
-            grad(bba, xf - 1.0, yf - 1.0, zf),
-        );
-        let xbb = lerp(
-            u,
-            grad(abb, xf, yf - 1.0, zf),
-            grad(bbb, xf - 1.0, yf - 1.0, zf),
-        );
+        let lerp = |t, a, b| a + t * (b - a);
 
-        let ya = lerp(v, xaa, xba);
-        let yb = lerp(v, xab, xbb);
-
-        lerp(w, ya, yb)
+        lerp(
+            w,
+            lerp(
+                v,
+                lerp(u, grad(aaa, xf, yf, zf), grad(baa, xf - 1.0, yf, zf)),
+                lerp(
+                    u,
+                    grad(aba, xf, yf - 1.0, zf),
+                    grad(bba, xf - 1.0, yf - 1.0, zf),
+                ),
+            ),
+            lerp(
+                v,
+                lerp(
+                    u,
+                    grad(aab, xf, yf, zf - 1.0),
+                    grad(bab, xf - 1.0, yf, zf - 1.0),
+                ),
+                lerp(
+                    u,
+                    grad(abb, xf, yf - 1.0, zf - 1.0),
+                    grad(bbb, xf - 1.0, yf - 1.0, zf - 1.0),
+                ),
+            ),
+        )
     }
 }
