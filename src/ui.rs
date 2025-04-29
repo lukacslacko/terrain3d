@@ -16,41 +16,50 @@ pub fn init() {
 }
 
 #[derive(Component)]
-struct MyCube;
+struct Globe;
 
-fn make_cube(n: u32) -> Mesh {
+fn make_globe(n: u32) -> Mesh {
     let mut positions = Vec::new();
     let mut colors = Vec::new();
     let mut normals = Vec::new();
     let mut indices = Vec::new();
 
-    for i in 0..=n {
-        for j in 0..=n {
-            let u = i as f32 / n as f32;
-            let v = j as f32 / n as f32;
-            let x = u - 0.5;
-            let y = v - 0.5;
-            let z = 0.5;
-            let r = (x * x + y * y + z * z).sqrt();
-            let nx = x / r;
-            let ny = y / r;
-            let nz = z / r;
-            let nr = 5.0;
-            let pos = [nx * nr, ny * nr, nz * nr];
-            let color = [u, v, 0.5, 1.0];
-            positions.push(pos);
-            colors.push(color);
-            normals.push([nx, ny, nz]);
-        }
-    }
+    let m = n + 1;
 
-    for i in 0..n {
-        for j in 0..n {
-            let a = i + (n + 1) * j;
-            let b = a + 1;
-            let c = a + (n + 2);
-            let d = a + (n + 1);
-            indices.extend([b, a, c, d, c, a]);
+    for face in 0..6 {
+        for i in 0..m {
+            for j in 0..m {
+                let u = i as f32 / n as f32;
+                let v = j as f32 / n as f32;
+                let x = u - 0.5;
+                let y = v - 0.5;
+                let z = 0.5;
+                let r = (x * x + y * y + z * z).sqrt();
+                let (nx, ny, nz) = match face {
+                    0 => (x / r, y / r, z / r),
+                    1 => (-x / r, y / r, -z / r),
+                    2 => (z / r, y / r, -x / r),
+                    3 => (-z / r, y / r, x / r),
+                    4 => (x / r, z / r, -y / r),
+                    5 => (x / r, -z / r, y / r),
+                    _ => unreachable!(),
+                };
+                let nr = 5.0;
+                let pos = [nx * nr, ny * nr, nz * nr];
+                let color = [u, v, (1 + face) as f32 / 8.0, 1.0];
+                positions.push(pos);
+                colors.push(color);
+                normals.push([nx, ny, nz]);
+            }
+        }
+        for i in 0..n {
+            for j in 0..n {
+                let a = i + m * j + face * m * m;
+                let b = a + 1;
+                let c = a + m + 1;
+                let d = a + m;
+                indices.extend([b, a, c, d, c, a]);
+            }
         }
     }
 
@@ -70,7 +79,7 @@ fn startup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let cube = meshes.add(make_cube(10));
+    let cube = meshes.add(make_globe(10));
     let material = materials.add(StandardMaterial {
         base_color: Color::WHITE,
         perceptual_roughness: 0.0,
@@ -82,7 +91,7 @@ fn startup(
         Mesh3d(cube),
         MeshMaterial3d(material),
         Transform::from_xyz(0.0, 0.0, 0.0),
-        MyCube,
+        Globe,
     ));
 
     commands.spawn((
@@ -104,7 +113,7 @@ fn startup(
 
 fn rotate_on_drag(
     mut motion_event_reader: EventReader<MouseMotion>,
-    mut transform: Single<(&mut Transform, &MyCube)>,
+    mut transform: Single<(&mut Transform, &Globe)>,
 ) {
     for event in motion_event_reader.read() {
         transform.0.rotate_x(event.delta.x * 0.01);
