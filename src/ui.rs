@@ -116,7 +116,7 @@ fn rotate_on_drag(
     mut transform: Single<(&mut Transform, &Globe)>,
 ) {
     for event in motion_event_reader.read() {
-        transform.0.rotate_x(event.delta.x * 0.01);
-        transform.0.rotate_y(event.delta.y * 0.01);
+        transform.0.rotate_x(-event.delta.y * 0.005);
+        transform.0.rotate_y(-event.delta.x * 0.005);
     }
 }
