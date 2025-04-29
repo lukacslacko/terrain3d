@@ -11,7 +11,7 @@ impl Perlin {
     pub fn noise(&self, x: f32, y: f32, z: f32) -> f32 {
         let mut total = 0.0;
         let mut frequency = self.frequency;
-        let mut amplitude = self.persistence;
+        let mut amplitude = 1.0;
 
         for _ in 0..self.octaves {
             total += self.single_layer(x * frequency, y * frequency, z * frequency) * amplitude;
