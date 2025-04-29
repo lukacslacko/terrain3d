@@ -29,10 +29,10 @@ fn make_globe(n: u32) -> Mesh {
 
     let perlin = Perlin {
         seed: 1,
-        frequency: 1.0,
+        frequency: 2.0,
         lacunarity: 2.13,
         persistence: 0.5,
-        octaves: 6,
+        octaves: 5,
     };
 
     println!("Making globe");
@@ -62,7 +62,7 @@ fn make_globe(n: u32) -> Mesh {
                     let (nx, ny, nz) = sphere(u, v);
                     let nr = 5.0;
                     // let color = [u, v, (1 + face) as f32 / 8.0, 1.0];
-                    let noise = perlin.noise(nx, ny, nz) * 3.0;
+                    let noise = perlin.noise(nx, ny, nz) * 2.0;
                     (
                         nr + noise,
                         [nx * (nr + noise), ny * (nr + noise), nz * (nr + noise)],
@@ -123,7 +123,7 @@ fn make_globe(n: u32) -> Mesh {
                         normpos[2] * sea_level,
                     ]);
                     let blueify = |c: [f32; 4], depth: f32| {
-                        let depth_ratio = (depth / 0.1).clamp(0.0, 1.0).sqrt();
+                        let depth_ratio = (depth / 0.05).clamp(0.0, 1.0).sqrt();
                         [
                             c[0] * (1.0 - depth_ratio),
                             c[1] * (1.0 - depth_ratio),
