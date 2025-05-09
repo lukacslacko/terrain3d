@@ -1,7 +1,9 @@
 use crate::perlin::Perlin;
 use bevy::{
     asset::RenderAssetUsages,
+    color::palettes::tailwind::*,
     input::{common_conditions::*, mouse::*},
+    picking::pointer::PointerInteraction,
     prelude::*,
 };
 
@@ -13,11 +15,15 @@ pub fn init() {
             FixedUpdate,
             rotate_on_drag.run_if(input_pressed(MouseButton::Left)),
         )
+        .add_systems(Update, draw_pointer)
         .run();
 }
 
 #[derive(Component)]
 struct Globe;
+
+#[derive(Component)]
+struct MainCamera;
 
 fn make_globe(n: u32) -> Mesh {
     let mut positions = Vec::new();
@@ -197,6 +203,7 @@ fn startup(
 
     commands.spawn((
         Camera3d::default(),
+        MainCamera,
         Transform::from_xyz(0.0, 11.0, 12.0).looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Z),
     ));
 }
@@ -212,4 +219,14 @@ fn rotate_on_drag(
         });
     transform.0.rotate_x(-delta_y * 0.005);
     transform.0.rotate_y(-delta_x * 0.005);
+}
+
+fn draw_pointer(pointers: Query<&PointerInteraction>, mut gizmos: Gizmos) {
+    for point in pointers
+        .iter()
+        .filter_map(|interaction| interaction.get_nearest_hit())
+        .filter_map(|(_entity, hit)| hit.position)
+    {
+        gizmos.sphere(point, 0.05, RED_500);
+    }
 }
