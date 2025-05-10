@@ -200,6 +200,16 @@ fn startup(
         },
         Transform::from_xyz(0.0, 5.0, 20.0),
     ));
+    commands.spawn((
+        PointLight {
+            shadows_enabled: true,
+            intensity: 10_000_000.0,
+            range: 100.0,
+            // shadow_depth_bias: 0.2,
+            ..default()
+        },
+        Transform::from_xyz(0.0, -5.0, -20.0),
+    ));
 
     commands.spawn((
         Camera3d::default(),
@@ -210,15 +220,34 @@ fn startup(
 
 fn rotate_on_drag(
     mut motion_event_reader: EventReader<MouseMotion>,
-    mut transform: Single<(&mut Transform, &Globe)>,
+    mut camera_transform: Query<(&mut Transform, &MainCamera)>,
 ) {
-    let (delta_x, delta_y) = motion_event_reader
+    let (dx, dy) = motion_event_reader
         .read()
         .fold((0.0, 0.0), |(x, y), event| {
-            (x + event.delta.x, y + event.delta.y)
+            (x - event.delta.x * 0.005, y - event.delta.y * 0.005)
         });
-    transform.0.rotate_x(-delta_y * 0.005);
-    transform.0.rotate_y(-delta_x * 0.005);
+        let (mut transform, _camera) = camera_transform.single_mut().unwrap();
+    
+        let origin = Vec3::ZERO;
+        let direction = transform.translation - origin;
+        let radius = 15.0;
+    
+        // Step 1: Get camera's local axes
+        let forward = -direction.normalize();
+        let right = transform.right().as_vec3(); // local right
+        let up = transform.up().as_vec3();      // local up
+    
+        // Step 2: Apply rotations
+        let rot_horizontal = Quat::from_axis_angle(up, dx);
+        let rot_vertical = Quat::from_axis_angle(right, dy);
+        let rotation = rot_horizontal * rot_vertical;
+    
+        let new_direction = rotation * direction;
+    
+        // Step 3: Update position and look at the origin
+        transform.translation = origin + new_direction.normalize() * radius;
+        transform.look_at(origin, up);
 }
 
 fn draw_pointer(pointers: Query<&PointerInteraction>, mut gizmos: Gizmos) {
