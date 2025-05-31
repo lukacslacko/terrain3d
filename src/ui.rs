@@ -1,7 +1,6 @@
 use crate::dijkstra::{GlobePoint, GlobePoints, GridPoint, dijkstra};
 use crate::perlin::Perlin;
 use crate::state::State;
-use bevy::state;
 use bevy::{
     asset::RenderAssetUsages,
     color::palettes::tailwind::*,
@@ -147,7 +146,8 @@ fn make_globe(n: u32, globe_points: &mut GlobePoints) -> Mesh {
                     colors.push(blueify(color, sea_level - noise));
                     normals.push(normpos);
                 }
-                let render_pos = pos.map(|x| (sea_level + height.max(0.0)) / (sea_level + height) * x);
+                let render_pos =
+                    pos.map(|x| (sea_level + height.max(0.0)) / (sea_level + height) * x);
                 globe_points.points.insert(
                     (face, i, j),
                     GlobePoint {
@@ -307,17 +307,29 @@ fn on_mouse_right_click(
         .filter_map(|interaction| interaction.get_nearest_hit())
         .filter_map(|(_entity, hit)| hit.position)
     {
-        let gridpoint = get_closest_gridpoint(point, 256);
-        state.cities.push(gridpoint);
-        if cfg!(debug_assertions) {
-            println!("Cities: {:?}", state.cities);
-        }
+        let gridpoint = get_closest_gridpoint(point, 128);
+        if let Some(&globe_point) = state.globe_points.points.get(&gridpoint) {
+            if globe_point.water {
+                println!("Can't place city on water: {:?}", gridpoint);
+                continue; // Skip water points
+            }
+            state.cities.push(gridpoint);
+            if cfg!(debug_assertions) {
+                println!("GlobePoint found: {:?}", globe_point);
+                println!("Cities: {:?}", state.cities);
+            }
 
-        commands.spawn((
-            Mesh3d(meshes.add(Cuboid::new(0.2, 0.2, 0.2))),
-            MeshMaterial3d(materials.add(Color::srgb_u8(124, 144, 255))),
-            Transform::from_xyz(point.x, point.y, point.z).looking_at(Vec3::ZERO, Vec3::Z),
-        ));
+            let marker_mesh = meshes.add(Cuboid::new(0.2, 0.2, 0.2));
+            let marker_material = materials.add(Color::srgb_u8(124, 144, 255));
+            commands.spawn((
+                Mesh3d(marker_mesh),
+                MeshMaterial3d(marker_material),
+                Transform::from_xyz(globe_point.pos[0], globe_point.pos[1], globe_point.pos[2])
+                    .looking_at(Vec3::ZERO, Vec3::Z),
+            ));
+        } else {
+            println!("No GlobePoint found for gridpoint: {:?}", gridpoint);
+        }
     }
 }
 
@@ -363,11 +375,11 @@ fn get_closest_gridpoint(pos: Vec3, n: u32) -> GridPoint {
 
     let xy = match face {
         0 => Vec2::new(norm_pos.x, norm_pos.y),
-        1 => Vec2::new(-norm_pos.x, norm_pos.y),
+        1 => Vec2::new(norm_pos.x, -norm_pos.y),
         2 => Vec2::new(-norm_pos.z, norm_pos.y),
-        3 => Vec2::new(norm_pos.z, norm_pos.y),
+        3 => Vec2::new(-norm_pos.z, -norm_pos.y),
         4 => Vec2::new(norm_pos.x, -norm_pos.z),
-        5 => Vec2::new(norm_pos.x, norm_pos.z),
+        5 => Vec2::new(-norm_pos.x, -norm_pos.z),
         _ => unreachable!(),
     };
     let grid_x = ((xy.x + 0.5) * n as f32).round() as u32;
