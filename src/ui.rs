@@ -161,6 +161,9 @@ fn make_globe(n: u32, globe_points: &mut GlobePoints) -> Mesh {
         }
     }
 
+    println!("Building graph.");
+    globe_points.build_graph();
+
     println!("Making mesh.");
 
     let mut mesh = Mesh::new(

@@ -2,10 +2,102 @@ use std::collections::HashMap;
 
 type GridPoint = (u32, u32, u32);
 
+struct Edge {
+    pub to: GridPoint,
+    pub cost: f32,
+}
+
 #[derive(Default)]
 pub struct GlobePoints {
     pub size: u32,
     pub points: HashMap<GridPoint, [f32; 3]>,
+    pub graph: HashMap<GridPoint, Vec<Edge>>,
+}
+
+fn cubic(grid: GridPoint, size: u32) -> [i32; 3] {
+    let u = grid.1 as i32;
+    let v = grid.2 as i32;
+    let s = size as i32;
+    match grid.0 {
+        0 => [u, v, s],
+        1 => [s - u, v, 0],
+        2 => [s, v, s - u],
+        3 => [0, v, u],
+        4 => [u, s, s - v],
+        5 => [u, 0, v],
+        _ => unreachable!(),
+    }
+}
+
+fn cost(p: [f32; 3], q: [f32; 3]) -> f32 {
+    let dx = p[0] - q[0];
+    let dy = p[1] - q[1];
+    let dz = p[2] - q[2];
+    (dx * dx + dy * dy + dz * dz).sqrt()
+}
+
+impl GlobePoints {
+    pub fn build_graph(&mut self) {
+        let steps = 3i32;
+        let size = self.size as i32;
+        let mut pts_done = 0;
+        let mut edges = 0;
+        for (&grid, &p) in &self.points {
+            if pts_done % 1000 == 0 {
+                println!(
+                    "Building graph: {}/{}, edges {}",
+                    pts_done,
+                    self.points.len(),
+                    edges
+                );
+            }
+            pts_done += 1;
+            if grid.1 as i32 >= steps
+                && (grid.1 as i32) < size - steps
+                && grid.2 as i32 >= steps
+                && (grid.2 as i32) < size - steps
+            {
+                for di in -steps..=steps {
+                    for dj in -steps..=steps {
+                        if di == 0 && dj == 0 {
+                            continue;
+                        }
+                        if di * di + dj * dj > steps * steps {
+                            continue;
+                        }
+                        let neighbor = (
+                            grid.0,
+                            (grid.1 as i32 + di) as u32,
+                            (grid.2 as i32 + dj) as u32,
+                        );
+                        if let Some(&q) = self.points.get(&neighbor) {
+                            self.graph.entry(grid).or_default().push(Edge {
+                                to: neighbor,
+                                cost: cost(p, q),
+                            });
+                            edges += 1;
+                        }
+                    }
+                }
+            } else {
+                for (&neighbor, &q) in &self.points {
+                    let other = cubic(neighbor, self.size);
+                    let this = cubic(grid, self.size);
+                    let dist2 = (other[0] - this[0]).pow(2)
+                        + (other[1] - this[1]).pow(2)
+                        + (other[2] - this[2]).pow(2);
+                    if dist2 > steps * steps || dist2 == 0 {
+                        continue;
+                    }
+                    self.graph.entry(grid).or_default().push(Edge {
+                        to: neighbor,
+                        cost: cost(p, q),
+                    });
+                    edges += 1;
+                }
+            }
+        }
+    }
 }
 
 pub fn dijkstra(start: GridPoint, end: GridPoint, globe_points: &GlobePoints) -> Vec<GridPoint> {
