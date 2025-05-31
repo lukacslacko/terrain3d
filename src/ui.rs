@@ -1,6 +1,7 @@
-use crate::dijkstra::{GlobePoints, GridPoint, dijkstra};
+use crate::dijkstra::{GlobePoint, GlobePoints, GridPoint, dijkstra};
 use crate::perlin::Perlin;
 use crate::state::State;
+use bevy::state;
 use bevy::{
     asset::RenderAssetUsages,
     color::palettes::tailwind::*,
@@ -100,28 +101,8 @@ fn make_globe(n: u32, globe_points: &mut GlobePoints) -> Mesh {
                 };
                 let (noise, pos) = surface(u, v);
 
-                globe_points.points.insert((face, i, j), pos);
-
-                /*
-                use std::f32::consts::PI;
-                use std::ops::Add;
-                trait Scalable
-                where
-                    Self: Add<f32, Output = f32> + Copy,
-                {
-                    fn scale(&self) -> f32 {
-                        (*self + 1.0) / 2.0
-                    }
-                }
-                impl Scalable for f32 {}
-                let color = [
-                    noise.sin().scale(),
-                    (noise + 2.0 * PI / 3.0).sin().scale(),
-                    (noise + 4.0 * PI / 3.0).sin().scale(),
-                    1.0,
-                ];
-                */
                 let sea_level = 5.0;
+
                 let snow = 0.5;
                 let height = noise - sea_level;
                 let color;
@@ -166,6 +147,15 @@ fn make_globe(n: u32, globe_points: &mut GlobePoints) -> Mesh {
                     colors.push(blueify(color, sea_level - noise));
                     normals.push(normpos);
                 }
+                let render_pos = pos.map(|x| (sea_level + height.max(0.0)) / (sea_level + height) * x);
+                globe_points.points.insert(
+                    (face, i, j),
+                    GlobePoint {
+                        pos: render_pos,
+                        water: height <= 0.0,
+                        snow: height >= snow,
+                    },
+                );
             }
         }
         for i in 0..n {
@@ -226,12 +216,12 @@ fn startup(
     println!("Dijkstra done, path length: {}", path.len());
 
     for (_, point) in path.iter().enumerate() {
-        let pos = state.globe_points.points[point];
+        let pos = &state.globe_points.points[point];
         let s = meshes.add(Sphere::new(0.1));
         commands.spawn((
             Mesh3d(s),
             MeshMaterial3d(material.clone()),
-            Transform::from_xyz(pos[0], pos[1], pos[2]),
+            Transform::from_xyz(pos.pos[0], pos.pos[1], pos.pos[2]),
             PointerInteraction::default(),
         ));
     }
