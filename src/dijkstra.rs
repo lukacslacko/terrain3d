@@ -140,5 +140,5 @@ pub fn dijkstra(start: GridPoint, end: GridPoint, globe_points: &GlobePoints) ->
         }
         current = prev;
     }
-    path.reverse();
+    path
 }

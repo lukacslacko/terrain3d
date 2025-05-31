@@ -183,7 +183,7 @@ fn startup(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut state: ResMut<State>,
 ) {
-    let mesh = make_globe(256, &mut state.globe_points);
+    let mesh = make_globe(128, &mut state.globe_points);
     let cube = meshes.add(mesh);
     let material = materials.add(StandardMaterial {
         base_color: Color::WHITE,
