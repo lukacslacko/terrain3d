@@ -121,8 +121,8 @@ pub fn dijkstra(start: GridPoint, end: GridPoint, globe_points: &GlobePoints) ->
                 if visited.contains(&edge.to) {
                     continue;
                 }
-                let new_dist = current_dist + OrderedFloat(edge.cost);
-                if !dist.contains_key(&edge.to) || new_dist < dist[&edge.to] {
+                let new_dist = current_dist - OrderedFloat(edge.cost);
+                if !dist.contains_key(&edge.to) || new_dist > dist[&edge.to] {
                     dist.insert(edge.to, new_dist);
                     come_from.insert(edge.to, current);
                     queue.push(edge.to, new_dist);

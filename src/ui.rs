@@ -1,4 +1,5 @@
 use crate::dijkstra::GlobePoints;
+use crate::dijkstra::dijkstra;
 use crate::perlin::Perlin;
 use crate::state::State;
 use bevy::{
@@ -202,6 +203,13 @@ fn startup(
     ));
 
     println!("Globe spawned.");
+
+    println!("Dijkstra");
+    let path = dijkstra(
+        (0, 0, 0), (1, 0, 0),
+        &state.globe_points,
+    );
+    println!("Dijkstra done, path length: {}", path.len());
 
     commands.spawn((
         PointLight {
