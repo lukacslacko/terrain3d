@@ -1,5 +1,4 @@
-use crate::dijkstra::GlobePoints;
-use crate::dijkstra::dijkstra;
+use crate::dijkstra::{GlobePoints, GridPoint, dijkstra};
 use crate::perlin::Perlin;
 use crate::state::State;
 use bevy::{
@@ -8,6 +7,7 @@ use bevy::{
     input::{common_conditions::*, mouse::*},
     picking::pointer::PointerInteraction,
     prelude::*,
+    render::mesh::{Mesh, Mesh3d},
 };
 
 pub fn init() {
@@ -17,6 +17,10 @@ pub fn init() {
         .add_systems(
             FixedUpdate,
             rotate_on_drag.run_if(input_pressed(MouseButton::Left)),
+        )
+        .add_systems(
+            Update,
+            on_mouse_right_click.run_if(input_just_pressed(MouseButton::Right)),
         )
         .insert_resource(State::default())
         .add_systems(Update, draw_pointer)
@@ -120,12 +124,25 @@ fn make_globe(n: u32, globe_points: &mut GlobePoints) -> Mesh {
                 let sea_level = 5.0;
                 let snow = 0.5;
                 let height = noise - sea_level;
-                let color = if height > snow {
-                    [1.0, 1.0, 1.0, 1.0]
+                let color;
+                if cfg!(debug_assertions) {
+                    // for debugging, use different colors for each face
+                    color = match face {
+                        0 => [1.0, 0.0, 0.0, 1.0], // red
+                        1 => [0.0, 1.0, 0.0, 1.0], // green
+                        2 => [0.0, 0.0, 1.0, 1.0], // blue
+                        3 => [1.0, 1.0, 0.0, 1.0], // yellow
+                        4 => [1.0, 0.4, 0.4, 1.0], // pink
+                        _ => [0.5, 0.5, 0.5, 1.0], // gray
+                    };
                 } else {
-                    let v = height / snow;
-                    [v / 2.5, (1.5 - v) / 3.0, v / 5.0, 1.0]
-                };
+                    color = if height > snow {
+                        [1.0, 1.0, 1.0, 1.0] // white for snow
+                    } else {
+                        let v = height / snow;
+                        [v / 2.5, (1.5 - v) / 3.0, v / 5.0, 1.0] // gradient color for land
+                    };
+                }
                 if height > 0.0 {
                     positions.push(pos);
                     colors.push(color);
@@ -205,10 +222,7 @@ fn startup(
     println!("Globe spawned.");
 
     println!("Dijkstra");
-    let path = dijkstra(
-        (2, 0, 0), (3, 0, 0),
-        &state.globe_points,
-    );
+    let path = dijkstra((2, 0, 0), (3, 0, 0), &state.globe_points);
     println!("Dijkstra done, path length: {}", path.len());
 
     for (_, point) in path.iter().enumerate() {
@@ -221,7 +235,6 @@ fn startup(
             PointerInteraction::default(),
         ));
     }
-
 
     commands.spawn((
         PointLight {
@@ -260,26 +273,26 @@ fn rotate_on_drag(
         .fold((0.0, 0.0), |(x, y), event| {
             (x - event.delta.x * 0.005, y - event.delta.y * 0.005)
         });
-        let (mut transform, _camera) = camera_transform.single_mut().unwrap();
-    
-        let origin = Vec3::ZERO;
-        let direction = transform.translation - origin;
-        let radius = 15.0;
-    
-        // Step 1: Get camera's local axes
-        let right = transform.right().as_vec3(); // local right
-        let up = transform.up().as_vec3();      // local up
-    
-        // Step 2: Apply rotations
-        let rot_horizontal = Quat::from_axis_angle(up, dx);
-        let rot_vertical = Quat::from_axis_angle(right, dy);
-        let rotation = rot_horizontal * rot_vertical;
-    
-        let new_direction = rotation * direction;
-    
-        // Step 3: Update position and look at the origin
-        transform.translation = origin + new_direction.normalize() * radius;
-        transform.look_at(origin, up);
+    let (mut transform, _camera) = camera_transform.single_mut().unwrap();
+
+    let origin = Vec3::ZERO;
+    let direction = transform.translation - origin;
+    let radius = 15.0;
+
+    // Step 1: Get camera's local axes
+    let right = transform.right().as_vec3(); // local right
+    let up = transform.up().as_vec3(); // local up
+
+    // Step 2: Apply rotations
+    let rot_horizontal = Quat::from_axis_angle(up, dx);
+    let rot_vertical = Quat::from_axis_angle(right, dy);
+    let rotation = rot_horizontal * rot_vertical;
+
+    let new_direction = rotation * direction;
+
+    // Step 3: Update position and look at the origin
+    transform.translation = origin + new_direction.normalize() * radius;
+    transform.look_at(origin, up);
 }
 
 fn draw_pointer(pointers: Query<&PointerInteraction>, mut gizmos: Gizmos) {
@@ -290,4 +303,81 @@ fn draw_pointer(pointers: Query<&PointerInteraction>, mut gizmos: Gizmos) {
     {
         gizmos.sphere(point, 0.05, RED_500);
     }
+}
+
+fn on_mouse_right_click(
+    pointers: Query<&PointerInteraction>,
+    mut state: ResMut<State>,
+    // mut meshes: ResMut<Assets<Mesh>>,
+) {
+    for point in pointers
+        .iter()
+        .filter_map(|interaction| interaction.get_nearest_hit())
+        .filter_map(|(_entity, hit)| hit.position)
+    {
+        let gridpoint = get_closest_gridpoint(point, 256);
+        state.cities.push(gridpoint);
+        if cfg!(debug_assertions) {
+            println!("Cities: {:?}", state.cities);
+        }
+    }
+}
+
+fn argmax(v: Vec3) -> usize {
+    let [x, y, z] = v.to_array();
+    if x >= y && x >= z {
+        0
+    } else if y >= z {
+        1
+    } else {
+        2
+    }
+}
+
+fn get_closest_gridpoint(pos: Vec3, n: u32) -> GridPoint {
+    let idx = argmax(pos.abs());
+    let sign_at_max = if pos[idx] < 0.0 { -1 } else { 1 };
+
+    let face = match (idx, sign_at_max) {
+        (0, 1) => 2,
+        (0, -1) => 3,
+        (1, 1) => 4,
+        (1, -1) => 5,
+        (2, 1) => 0,
+        (2, -1) => 1,
+        _ => unreachable!(),
+    };
+
+    if cfg!(debug_assertions) {
+        let color = match face {
+            0 => "red",
+            1 => "green",
+            2 => "blue",
+            3 => "yellow",
+            4 => "pink",
+            5 => "gray",
+            _ => unreachable!(),
+        };
+        println!("face color: {:?}", color);
+    }
+
+    let norm_pos = pos * 0.5 / pos[idx];
+
+    let xy = match face {
+        0 => Vec2::new(norm_pos.x, norm_pos.y),
+        1 => Vec2::new(-norm_pos.x, norm_pos.y),
+        2 => Vec2::new(-norm_pos.z, norm_pos.y),
+        3 => Vec2::new(norm_pos.z, norm_pos.y),
+        4 => Vec2::new(norm_pos.x, -norm_pos.z),
+        5 => Vec2::new(norm_pos.x, norm_pos.z),
+        _ => unreachable!(),
+    };
+    let grid_x = ((xy.x + 0.5) * n as f32).round() as u32;
+    let grid_y = ((xy.y + 0.5) * n as f32).round() as u32;
+
+    let gridpoint = (face, grid_x, grid_y);
+    if cfg!(debug_assertions) {
+        println!("gridpoint: {:?}", gridpoint);
+    }
+    return gridpoint;
 }

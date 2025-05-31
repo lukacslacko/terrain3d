@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use priority_queue::PriorityQueue;
 use ordered_float::OrderedFloat;
 
-type GridPoint = (u32, u32, u32);
+pub type GridPoint = (u32, u32, u32);
 
 pub struct Edge {
     pub to: GridPoint,
