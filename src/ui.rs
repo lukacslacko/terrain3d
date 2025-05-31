@@ -34,6 +34,8 @@ fn make_globe(n: u32, globe_points: &mut GlobePoints) -> Mesh {
     let mut normals = Vec::new();
     let mut indices = Vec::new();
 
+    globe_points.size = n;
+
     let m = n + 1;
 
     let perlin = Perlin {
