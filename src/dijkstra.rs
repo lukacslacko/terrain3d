@@ -1,8 +1,10 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use priority_queue::PriorityQueue;
+use ordered_float::OrderedFloat;
 
 type GridPoint = (u32, u32, u32);
 
-struct Edge {
+pub struct Edge {
     pub to: GridPoint,
     pub cost: f32,
 }
@@ -101,5 +103,42 @@ impl GlobePoints {
 }
 
 pub fn dijkstra(start: GridPoint, end: GridPoint, globe_points: &GlobePoints) -> Vec<GridPoint> {
-    return vec![];
+    let mut queue = PriorityQueue::new();
+    let mut visited = HashSet::new();
+    let mut dist = HashMap::new();
+    let mut come_from = HashMap::new();
+    queue.push(start, OrderedFloat(0.0));
+    while let Some((current, current_dist)) = queue.pop() {
+        if visited.contains(&current) {
+            continue;
+        }
+        visited.insert(current);
+        if current == end {
+            break;
+        }
+        if let Some(edges) = globe_points.graph.get(&current) {
+            for edge in edges {
+                if visited.contains(&edge.to) {
+                    continue;
+                }
+                let new_dist = current_dist + OrderedFloat(edge.cost);
+                if !dist.contains_key(&edge.to) || new_dist < dist[&edge.to] {
+                    dist.insert(edge.to, new_dist);
+                    come_from.insert(edge.to, current);
+                    queue.push(edge.to, new_dist);
+                }
+            }
+        }
+    }
+    let mut path = Vec::new();
+    let mut current = end;
+    while let Some(&prev) = come_from.get(&current) {
+        path.push(current);
+        if prev == start {
+            path.push(start);
+            break;
+        }
+        current = prev;
+    }
+    path.reverse();
 }
