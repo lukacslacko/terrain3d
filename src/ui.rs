@@ -1,5 +1,5 @@
 use crate::dijkstra::{GlobePoint, GlobePoints, GridPoint, dijkstra};
-use crate::perlin::Perlin;
+use crate::perlin::{Perlin, PerlinConfig};
 use crate::state::State;
 use bevy::{
     asset::RenderAssetUsages,
@@ -33,7 +33,7 @@ struct Globe;
 #[derive(Component)]
 struct MainCamera;
 
-fn make_globe(n: u32, globe_points: &mut GlobePoints) -> Mesh {
+fn make_globe(n: u32, globe_points: &mut GlobePoints, perlin_config: PerlinConfig) -> Mesh {
     let mut positions = Vec::new();
     let mut colors = Vec::new();
     let mut normals = Vec::new();
@@ -44,11 +44,7 @@ fn make_globe(n: u32, globe_points: &mut GlobePoints) -> Mesh {
     let m = n + 1;
 
     let perlin = Perlin {
-        seed: 5,
-        frequency: 2.0,
-        lacunarity: 1.57,
-        persistence: 0.5,
-        octaves: 6,
+        config: perlin_config,
     };
 
     println!("Making globe");
@@ -191,7 +187,8 @@ fn startup(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut state: ResMut<State>,
 ) {
-    let mesh = make_globe(128, &mut state.globe_points);
+    let perlin_config = state.config.perlin_config.clone();
+    let mesh = make_globe(state.config.n, &mut state.globe_points, perlin_config);
     let cube = meshes.add(mesh);
     let material = materials.add(StandardMaterial {
         base_color: Color::WHITE,
@@ -307,7 +304,7 @@ fn on_mouse_right_click(
         .filter_map(|interaction| interaction.get_nearest_hit())
         .filter_map(|(_entity, hit)| hit.position)
     {
-        let gridpoint = get_closest_gridpoint(point, 128);
+        let gridpoint = get_closest_gridpoint(point, state.globe_points.size);
         if let Some(&globe_point) = state.globe_points.points.get(&gridpoint) {
             if globe_point.water {
                 println!("Can't place city on water: {:?}", gridpoint);
