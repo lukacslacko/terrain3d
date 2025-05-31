@@ -1,6 +1,6 @@
-use std::collections::{HashMap, HashSet};
-use priority_queue::PriorityQueue;
 use ordered_float::OrderedFloat;
+use priority_queue::PriorityQueue;
+use std::collections::{HashMap, HashSet};
 
 pub type GridPoint = (u32, u32, u32);
 
@@ -9,10 +9,17 @@ pub struct Edge {
     pub cost: f32,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct GlobePoint {
+    pub pos: [f32; 3],
+    pub water: bool,
+    pub snow: bool,
+}
+
 #[derive(Default)]
 pub struct GlobePoints {
     pub size: u32,
-    pub points: HashMap<GridPoint, [f32; 3]>,
+    pub points: HashMap<GridPoint, GlobePoint>,
     pub graph: HashMap<GridPoint, Vec<Edge>>,
 }
 
@@ -31,11 +38,16 @@ fn cubic(grid: GridPoint, size: u32) -> [i32; 3] {
     }
 }
 
-fn cost(p: [f32; 3], q: [f32; 3]) -> f32 {
-    let dx = p[0] - q[0];
-    let dy = p[1] - q[1];
-    let dz = p[2] - q[2];
-    (dx * dx + dy * dy + dz * dz).sqrt()
+fn cost(p: &GlobePoint, q: &GlobePoint) -> f32 {
+    let dx = p.pos[0] - q.pos[0];
+    let dy = p.pos[1] - q.pos[1];
+    let dz = p.pos[2] - q.pos[2];
+    let penalty = if p.water || q.water {
+        5.0
+    } else {
+        if p.snow || q.snow { 3.0 } else { 1.0 }
+    };
+    (dx * dx + dy * dy + dz * dz).sqrt() * penalty
 }
 
 impl GlobePoints {
@@ -75,7 +87,7 @@ impl GlobePoints {
                         if let Some(&q) = self.points.get(&neighbor) {
                             self.graph.entry(grid).or_default().push(Edge {
                                 to: neighbor,
-                                cost: cost(p, q),
+                                cost: cost(&p, &q),
                             });
                             edges += 1;
                         }
@@ -93,7 +105,7 @@ impl GlobePoints {
                     }
                     self.graph.entry(grid).or_default().push(Edge {
                         to: neighbor,
-                        cost: cost(p, q),
+                        cost: cost(&p, &q),
                     });
                     edges += 1;
                 }
