@@ -1,5 +1,6 @@
 use crate::dijkstra::GlobePoints;
 use crate::perlin::Perlin;
+use crate::state::State;
 use bevy::{
     asset::RenderAssetUsages,
     color::palettes::tailwind::*,
@@ -16,6 +17,7 @@ pub fn init() {
             FixedUpdate,
             rotate_on_drag.run_if(input_pressed(MouseButton::Left)),
         )
+        .insert_resource(State::default())
         .add_systems(Update, draw_pointer)
         .run();
 }
@@ -26,7 +28,7 @@ struct Globe;
 #[derive(Component)]
 struct MainCamera;
 
-fn make_globe(n: u32) -> (Mesh, GlobePoints) {
+fn make_globe(n: u32, globe_points: &mut GlobePoints) -> Mesh {
     let mut positions = Vec::new();
     let mut colors = Vec::new();
     let mut normals = Vec::new();
@@ -43,8 +45,6 @@ fn make_globe(n: u32) -> (Mesh, GlobePoints) {
     };
 
     println!("Making globe");
-
-    let mut globe_points = GlobePoints::default();
 
     for face in 0..6 {
         println!("Making face {}", face);
@@ -169,15 +169,16 @@ fn make_globe(n: u32) -> (Mesh, GlobePoints) {
     mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
     mesh.insert_indices(bevy::render::mesh::Indices::U32(indices));
-    (mesh, globe_points)
+    mesh
 }
 
 fn startup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut state: ResMut<State>,
 ) {
-    let (mesh, globe_points) = make_globe(256);
+    let mesh = make_globe(256, &mut state.globe_points);
     let cube = meshes.add(mesh);
     let material = materials.add(StandardMaterial {
         base_color: Color::WHITE,
