@@ -1,3 +1,4 @@
+mod dijkstra;
 mod perlin;
 mod ui;
 

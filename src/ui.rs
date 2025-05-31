@@ -1,3 +1,4 @@
+use crate::dijkstra::GlobePoints;
 use crate::perlin::Perlin;
 use bevy::{
     asset::RenderAssetUsages,
@@ -25,7 +26,7 @@ struct Globe;
 #[derive(Component)]
 struct MainCamera;
 
-fn make_globe(n: u32) -> Mesh {
+fn make_globe(n: u32) -> (Mesh, GlobePoints) {
     let mut positions = Vec::new();
     let mut colors = Vec::new();
     let mut normals = Vec::new();
@@ -42,6 +43,8 @@ fn make_globe(n: u32) -> Mesh {
     };
 
     println!("Making globe");
+
+    let mut globe_points = GlobePoints::default();
 
     for face in 0..6 {
         println!("Making face {}", face);
@@ -89,6 +92,9 @@ fn make_globe(n: u32) -> Mesh {
                     [n[0] / r, n[1] / r, n[2] / r]
                 };
                 let (noise, pos) = surface(u, v);
+
+                globe_points.points.insert((face, i, j), pos);
+
                 /*
                 use std::f32::consts::PI;
                 use std::ops::Add;
@@ -163,7 +169,7 @@ fn make_globe(n: u32) -> Mesh {
     mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
     mesh.insert_indices(bevy::render::mesh::Indices::U32(indices));
-    mesh
+    (mesh, globe_points)
 }
 
 fn startup(
@@ -171,7 +177,8 @@ fn startup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let cube = meshes.add(make_globe(256));
+    let (mesh, globe_points) = make_globe(256);
+    let cube = meshes.add(mesh);
     let material = materials.add(StandardMaterial {
         base_color: Color::WHITE,
         perceptual_roughness: 0.0,
@@ -234,7 +241,6 @@ fn rotate_on_drag(
         let radius = 15.0;
     
         // Step 1: Get camera's local axes
-        let forward = -direction.normalize();
         let right = transform.right().as_vec3(); // local right
         let up = transform.up().as_vec3();      // local up
     
