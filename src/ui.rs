@@ -308,7 +308,9 @@ fn draw_pointer(pointers: Query<&PointerInteraction>, mut gizmos: Gizmos) {
 fn on_mouse_right_click(
     pointers: Query<&PointerInteraction>,
     mut state: ResMut<State>,
-    // mut meshes: ResMut<Assets<Mesh>>,
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     for point in pointers
         .iter()
@@ -320,6 +322,12 @@ fn on_mouse_right_click(
         if cfg!(debug_assertions) {
             println!("Cities: {:?}", state.cities);
         }
+
+        commands.spawn((
+            Mesh3d(meshes.add(Cuboid::new(0.2, 0.2, 0.2))),
+            MeshMaterial3d(materials.add(Color::srgb_u8(124, 144, 255))),
+            Transform::from_xyz(point.x, point.y, point.z).looking_at(Vec3::ZERO, Vec3::Z),
+        ));
     }
 }
 
