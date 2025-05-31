@@ -197,7 +197,7 @@ fn startup(
 
     commands.spawn((
         Mesh3d(cube),
-        MeshMaterial3d(material),
+        MeshMaterial3d(material.clone()),
         Transform::from_xyz(0.0, 0.0, 0.0),
         Globe,
     ));
@@ -206,10 +206,22 @@ fn startup(
 
     println!("Dijkstra");
     let path = dijkstra(
-        (0, 0, 0), (1, 0, 0),
+        (2, 0, 0), (3, 0, 0),
         &state.globe_points,
     );
     println!("Dijkstra done, path length: {}", path.len());
+
+    for (_, point) in path.iter().enumerate() {
+        let pos = state.globe_points.points[point];
+        let s = meshes.add(Sphere::new(0.1));
+        commands.spawn((
+            Mesh3d(s),
+            MeshMaterial3d(material.clone()),
+            Transform::from_xyz(pos[0], pos[1], pos[2]),
+            PointerInteraction::default(),
+        ));
+    }
+
 
     commands.spawn((
         PointLight {
