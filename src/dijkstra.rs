@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-type GridPoint = (u32, u32, u32);
+pub type GridPoint = (u32, u32, u32);
 
 #[derive(Default)]
 pub struct GlobePoints {
