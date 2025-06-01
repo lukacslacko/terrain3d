@@ -15,7 +15,6 @@ pub struct Edge {
 pub struct GlobePoint {
     pub pos: Vec3,
     pub water: bool,
-    pub snow: bool,
     pub penalty: f32,
 }
 

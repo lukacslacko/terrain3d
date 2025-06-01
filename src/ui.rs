@@ -150,7 +150,6 @@ fn make_globe(config: &crate::state::Config) -> (GlobePoints, Mesh) {
                     GlobePoint {
                         pos: Vec3::from(render_pos),
                         water: height <= 0.0,
-                        snow: height >= snow,
                         penalty: if height <= 0.0 {
                             config.water_penalty
                         } else if height >= snow {
