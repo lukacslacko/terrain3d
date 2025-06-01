@@ -9,6 +9,7 @@ pub type GridPoint = (u32, u32, u32);
 pub struct Edge {
     pub to: GridPoint,
     pub cost: f32,
+    pub discounted: bool, // true if cost reduction has been applied
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -80,6 +81,7 @@ impl GlobePoints {
                             self.graph.entry(grid).or_default().push(Edge {
                                 to: neighbor,
                                 cost: cost(&p, &q),
+                                discounted: false,
                             });
                             edges += 1;
                         }
@@ -98,6 +100,7 @@ impl GlobePoints {
                     self.graph.entry(grid).or_default().push(Edge {
                         to: neighbor,
                         cost: cost(&p, &q),
+                        discounted: false,
                     });
                     edges += 1;
                 }
@@ -106,7 +109,7 @@ impl GlobePoints {
     }
 }
 
-pub fn dijkstra(start: GridPoint, end: GridPoint, globe_points: &GlobePoints) -> Vec<GridPoint> {
+pub fn dijkstra(start: GridPoint, end: GridPoint, globe_points: &mut GlobePoints, reduction_factor: f32) -> Vec<GridPoint> {
     let mut queue = PriorityQueue::new();
     let mut visited = HashSet::new();
     let mut dist = HashMap::new();
@@ -143,6 +146,26 @@ pub fn dijkstra(start: GridPoint, end: GridPoint, globe_points: &GlobePoints) ->
             break;
         }
         current = prev;
+    }
+    // Apply cost reduction to edges in the path (only once per edge)
+    for w in path.windows(2) {
+        let (from, to) = (w[1], w[0]);
+        if let Some(edges) = globe_points.graph.get_mut(&from) {
+            for edge in edges.iter_mut() {
+                if edge.to == to && !edge.discounted {
+                    edge.cost /= reduction_factor;
+                    edge.discounted = true;
+                }
+            }
+        }
+        if let Some(edges) = globe_points.graph.get_mut(&to) {
+            for edge in edges.iter_mut() {
+                if edge.to == from && !edge.discounted {
+                    edge.cost /= reduction_factor;
+                    edge.discounted = true;
+                }
+            }
+        }
     }
     path
 }
