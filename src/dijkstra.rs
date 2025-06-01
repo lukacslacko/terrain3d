@@ -21,7 +21,6 @@ pub struct GlobePoint {
 
 #[derive(Default)]
 pub struct GlobePoints {
-    pub size: u32,
     pub points: HashMap<GridPoint, GlobePoint>,
     pub graph: HashMap<GridPoint, Vec<Edge>>,
 }
@@ -47,17 +46,9 @@ fn cost(p: &GlobePoint, q: &GlobePoint) -> f32 {
 }
 
 impl GlobePoints {
-    pub fn new(size: u32) -> Self {
-        Self {
-            size,
-            points: HashMap::new(),
-            graph: HashMap::new(),
-        }
-    }
-
-    pub fn build_graph(&mut self) {
+    pub fn build_graph(&mut self, grid_size: u32) {
         let steps = 3i32;
-        let size = self.size as i32;
+        let size = grid_size as i32;
         let mut pts_done = 0;
         let mut edges = 0;
         for (&grid, &p) in &self.points {
@@ -99,8 +90,8 @@ impl GlobePoints {
                 }
             } else {
                 for (&neighbor, &q) in &self.points {
-                    let other = cubic(neighbor, self.size);
-                    let this = cubic(grid, self.size);
+                    let other = cubic(neighbor, grid_size);
+                    let this = cubic(grid, grid_size);
                     let dist2 = (other[0] - this[0]).pow(2)
                         + (other[1] - this[1]).pow(2)
                         + (other[2] - this[2]).pow(2);
