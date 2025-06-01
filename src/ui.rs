@@ -241,17 +241,13 @@ fn startup(
         handle: path_material_handle.clone(),
     });
 
-    let path_mesh_handle = meshes.add(Sphere {
-        radius: 0.1,
-        ..default()
-    });
+    let path_mesh_handle = meshes.add(Sphere { radius: 0.1 });
     commands.insert_resource(PathMeshHandle {
         handle: path_mesh_handle.clone(),
     });
 
     let city_mesh_handle = meshes.add(Cuboid {
         half_size: Vec3::splat(state.config.city_marker_size),
-        ..default()
     });
     commands.insert_resource(CityMeshHandle {
         handle: city_mesh_handle.clone(),
