@@ -7,6 +7,11 @@ use bevy::prelude::*;
 pub struct Config {
     pub grid_size: u32,
     pub perlin_config: perlin::PerlinConfig,
+    pub water_penalty: f32,
+    pub snow_penalty: f32,
+    pub min_city_distance: f32,
+    pub city_marker_size: f32,
+    pub city_marker_color: Color,
 }
 
 impl Default for Config {
@@ -20,6 +25,11 @@ impl Default for Config {
                 persistence: 0.5,
                 octaves: 6,
             },
+            water_penalty: 5.0,
+            snow_penalty: 3.0,
+            min_city_distance: 0.5,
+            city_marker_size: 0.2,
+            city_marker_color: Color::srgb_u8(124, 144, 255),
         }
     }
 }

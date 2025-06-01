@@ -1,5 +1,5 @@
 use crate::dijkstra::{GlobePoint, GlobePoints, GridPoint, dijkstra};
-use crate::perlin::{Perlin, PerlinConfig};
+use crate::perlin::Perlin;
 use crate::state::State;
 use bevy::{
     asset::RenderAssetUsages,
@@ -33,18 +33,19 @@ struct Globe;
 #[derive(Component)]
 struct MainCamera;
 
-fn make_globe(grid_size: u32, globe_points: &mut GlobePoints, perlin_config: PerlinConfig) -> Mesh {
+fn make_globe(config: &crate::state::Config) -> (GlobePoints, Mesh) {
     let mut positions = Vec::new();
     let mut colors = Vec::new();
     let mut normals = Vec::new();
     let mut indices = Vec::new();
 
-    globe_points.size = grid_size;
+    let mut globe_points = GlobePoints::new(config.grid_size);
+    let grid_size = config.grid_size;
 
     let m = grid_size + 1;
 
     let perlin = Perlin {
-        config: perlin_config,
+        config: config.perlin_config,
     };
 
     println!("Making globe");
@@ -147,9 +148,16 @@ fn make_globe(grid_size: u32, globe_points: &mut GlobePoints, perlin_config: Per
                 globe_points.points.insert(
                     (face, i, j),
                     GlobePoint {
-                        pos: render_pos,
+                        pos: Vec3::from(render_pos),
                         water: height <= 0.0,
                         snow: height >= snow,
+                        penalty: if height <= 0.0 {
+                            config.water_penalty
+                        } else if height >= snow {
+                            config.snow_penalty
+                        } else {
+                            1.0
+                        },
                     },
                 );
             }
@@ -178,7 +186,7 @@ fn make_globe(grid_size: u32, globe_points: &mut GlobePoints, perlin_config: Per
     mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, colors);
     mesh.insert_attribute(Mesh::ATTRIBUTE_NORMAL, normals);
     mesh.insert_indices(bevy::render::mesh::Indices::U32(indices));
-    mesh
+    (globe_points, mesh)
 }
 
 fn startup(
@@ -187,12 +195,8 @@ fn startup(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut state: ResMut<State>,
 ) {
-    let perlin_config = state.config.perlin_config.clone();
-    let mesh = make_globe(
-        state.config.grid_size,
-        &mut state.globe_points,
-        perlin_config,
-    );
+    let (globe_points, mesh) = make_globe(&state.config);
+    state.globe_points = globe_points;
     let cube = meshes.add(mesh);
     let material = materials.add(StandardMaterial {
         base_color: Color::WHITE,
@@ -314,14 +318,26 @@ fn on_mouse_right_click(
                 println!("Can't place city on water: {:?}", gridpoint);
                 continue; // Skip water points
             }
+
+            // Check if a city already exists nearby
+            if state.cities.iter().any(|city| {
+                let city_pos = state.globe_points.points[city].pos;
+                let distance = (city_pos - globe_point.pos).length();
+                distance < state.config.min_city_distance // Adjust the threshold as needed
+            }) {
+                println!("City already exists near gridpoint: {:?}", gridpoint);
+                continue; // Skip if a city already exists nearby
+            }
+
             state.cities.push(gridpoint);
             if cfg!(debug_assertions) {
-                println!("GlobePoint found: {:?}", globe_point);
+                println!("Placing city at globe_point: {:?}", globe_point);
                 println!("Cities: {:?}", state.cities);
             }
 
-            let marker_mesh = meshes.add(Cuboid::new(0.2, 0.2, 0.2));
-            let marker_material = materials.add(Color::srgb_u8(124, 144, 255));
+            let size = state.config.city_marker_size;
+            let marker_mesh = meshes.add(Cuboid::new(size, size, size));
+            let marker_material = materials.add(state.config.city_marker_color);
             commands.spawn((
                 Mesh3d(marker_mesh),
                 MeshMaterial3d(marker_material),

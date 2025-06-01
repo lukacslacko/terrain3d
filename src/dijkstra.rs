@@ -1,7 +1,9 @@
+use bevy::math::Vec3;
 use ordered_float::OrderedFloat;
 use priority_queue::PriorityQueue;
 use std::collections::{HashMap, HashSet};
 
+// face index, row, column
 pub type GridPoint = (u32, u32, u32);
 
 pub struct Edge {
@@ -11,9 +13,10 @@ pub struct Edge {
 
 #[derive(Debug, Clone, Copy)]
 pub struct GlobePoint {
-    pub pos: [f32; 3],
+    pub pos: Vec3,
     pub water: bool,
     pub snow: bool,
+    pub penalty: f32,
 }
 
 #[derive(Default)]
@@ -39,18 +42,19 @@ fn cubic(grid: GridPoint, size: u32) -> [i32; 3] {
 }
 
 fn cost(p: &GlobePoint, q: &GlobePoint) -> f32 {
-    let dx = p.pos[0] - q.pos[0];
-    let dy = p.pos[1] - q.pos[1];
-    let dz = p.pos[2] - q.pos[2];
-    let penalty = if p.water || q.water {
-        5.0
-    } else {
-        if p.snow || q.snow { 3.0 } else { 1.0 }
-    };
-    (dx * dx + dy * dy + dz * dz).sqrt() * penalty
+    let penalty = p.penalty.max(q.penalty);
+    p.pos.distance(q.pos) * penalty
 }
 
 impl GlobePoints {
+    pub fn new(size: u32) -> Self {
+        Self {
+            size,
+            points: HashMap::new(),
+            graph: HashMap::new(),
+        }
+    }
+
     pub fn build_graph(&mut self) {
         let steps = 3i32;
         let size = self.size as i32;
