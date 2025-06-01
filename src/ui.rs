@@ -199,7 +199,7 @@ fn startup(
     state.globe_points = globe_points;
     let cube = meshes.add(mesh);
     let material = materials.add(StandardMaterial {
-        base_color: Color::YELLOW,
+        base_color: Color::WHITE,
         perceptual_roughness: 0.0,
         metallic: 0.0,
         ..default()
