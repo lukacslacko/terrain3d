@@ -39,7 +39,6 @@ fn make_globe(config: &crate::state::Config) -> (GlobePoints, Mesh) {
     let mut normals = Vec::new();
     let mut indices = Vec::new();
 
-    // globe_points.size = grid_size;
     let mut globe_points = GlobePoints::new(config.grid_size);
     let grid_size = config.grid_size;
 
