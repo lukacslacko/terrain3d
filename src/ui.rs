@@ -101,25 +101,22 @@ fn make_globe(config: &crate::state::Config) -> (GlobePoints, Mesh) {
 
                 let snow = 0.5;
                 let height = noise - sea_level;
-                let color;
-                if cfg!(debug_assertions) {
+                let color = if cfg!(debug_assertions) {
                     // for debugging, use different colors for each face
-                    color = match face {
+                    match face {
                         0 => [1.0, 0.0, 0.0, 1.0], // red
                         1 => [0.0, 1.0, 0.0, 1.0], // green
                         2 => [0.0, 0.0, 1.0, 1.0], // blue
                         3 => [1.0, 1.0, 0.0, 1.0], // yellow
                         4 => [1.0, 0.4, 0.4, 1.0], // pink
                         _ => [0.5, 0.5, 0.5, 1.0], // gray
-                    };
+                    }
+                } else if height > snow {
+                    [1.0, 1.0, 1.0, 1.0] // white for snow
                 } else {
-                    color = if height > snow {
-                        [1.0, 1.0, 1.0, 1.0] // white for snow
-                    } else {
-                        let v = height / snow;
-                        [v / 2.5, (1.5 - v) / 3.0, v / 5.0, 1.0] // gradient color for land
-                    };
-                }
+                    let v = height / snow;
+                    [v / 2.5, (1.5 - v) / 3.0, v / 5.0, 1.0] // gradient color for land
+                };
                 if height > 0.0 {
                     positions.push(pos);
                     colors.push(color);
@@ -219,7 +216,7 @@ fn startup(
     let path = dijkstra((2, 0, 0), (3, 0, 0), &state.globe_points);
     println!("Dijkstra done, path length: {}", path.len());
 
-    for (_, point) in path.iter().enumerate() {
+    for point in path.iter() {
         let pos = &state.globe_points.points[point];
         let s = meshes.add(Sphere::new(0.1));
         commands.spawn((
@@ -405,5 +402,5 @@ fn get_closest_gridpoint(pos: Vec3, grid_size: u32) -> GridPoint {
     if cfg!(debug_assertions) {
         println!("gridpoint: {:?}", gridpoint);
     }
-    return gridpoint;
+    gridpoint
 }
