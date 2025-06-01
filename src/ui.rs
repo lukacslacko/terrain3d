@@ -33,6 +33,16 @@ struct Globe;
 #[derive(Component)]
 struct MainCamera;
 
+#[derive(Resource)]
+struct MainMaterialHandle {
+    handle: Handle<StandardMaterial>,
+}
+
+#[derive(Resource)]
+struct CityMaterialHandle {
+    handle: Handle<StandardMaterial>,
+}
+
 fn make_globe(config: &crate::state::Config) -> (GlobePoints, Mesh) {
     let mut positions = Vec::new();
     let mut colors = Vec::new();
@@ -200,32 +210,36 @@ fn startup(
         metallic: 0.0,
         ..default()
     });
+    commands.insert_resource(MainMaterialHandle {
+        handle: material.clone(),
+    });
+
+    commands.insert_resource(CityMaterialHandle {
+        handle: materials.add(StandardMaterial {
+            base_color: state.config.city_marker_color,
+            perceptual_roughness: 0.0,
+            metallic: 0.0,
+            ..default()
+        }),
+    });
 
     println!("Spawning globe.");
-
     commands.spawn((
         Mesh3d(cube),
         MeshMaterial3d(material.clone()),
         Transform::from_xyz(0.0, 0.0, 0.0),
         Globe,
     ));
-
     println!("Globe spawned.");
 
-    println!("Dijkstra");
-    let path = dijkstra((2, 0, 0), (3, 0, 0), &state.globe_points);
-    println!("Dijkstra done, path length: {}", path.len());
-
-    for point in path.iter() {
-        let pos = &state.globe_points.points[point];
-        let s = meshes.add(Sphere::new(0.1));
-        commands.spawn((
-            Mesh3d(s),
-            MeshMaterial3d(material.clone()),
-            Transform::from_xyz(pos.pos[0], pos.pos[1], pos.pos[2]),
-            PointerInteraction::default(),
-        ));
-    }
+    create_path(
+        &mut commands,
+        meshes.as_mut(),
+        &state,
+        material,
+        (2, 0, 0),
+        (3, 0, 0),
+    );
 
     commands.spawn((
         PointLight {
@@ -253,6 +267,30 @@ fn startup(
         MainCamera,
         Transform::from_xyz(0.0, 11.0, 12.0).looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Z),
     ));
+}
+
+fn create_path(
+    commands: &mut Commands<'_, '_>,
+    meshes: &mut Assets<Mesh>,
+    state: &State,
+    material: Handle<StandardMaterial>,
+    start: GridPoint,
+    end: GridPoint,
+) {
+    println!("Dijkstra");
+    let path = dijkstra(start, end, &state.globe_points);
+    println!("Dijkstra done, path length: {}", path.len());
+
+    for point in path.iter() {
+        let pos = &state.globe_points.points[point];
+        let s = meshes.add(Sphere::new(0.1));
+        commands.spawn((
+            Mesh3d(s),
+            MeshMaterial3d(material.clone()),
+            Transform::from_xyz(pos.pos[0], pos.pos[1], pos.pos[2]),
+            PointerInteraction::default(),
+        ));
+    }
 }
 
 fn rotate_on_drag(
@@ -301,7 +339,8 @@ fn on_mouse_right_click(
     mut state: ResMut<State>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    city_marker_material: Res<CityMaterialHandle>,
+    main_material: Res<MainMaterialHandle>,
 ) {
     for point in pointers
         .iter()
@@ -331,12 +370,25 @@ fn on_mouse_right_click(
                 println!("Cities: {:?}", state.cities);
             }
 
+            // if the number of cities is even, create a path between the two last cities
+            if state.cities.len() % 2 == 0 {
+                let last_city = *state.cities.last().unwrap();
+                let second_last_city = *state.cities.get(state.cities.len() - 2).unwrap();
+                create_path(
+                    &mut commands,
+                    meshes.as_mut(),
+                    &state,
+                    main_material.handle.clone(),
+                    second_last_city,
+                    last_city,
+                );
+            }
+
             let size = state.config.city_marker_size;
             let marker_mesh = meshes.add(Cuboid::new(size, size, size));
-            let marker_material = materials.add(state.config.city_marker_color);
             commands.spawn((
                 Mesh3d(marker_mesh),
-                MeshMaterial3d(marker_material),
+                MeshMaterial3d(city_marker_material.handle.clone()),
                 Transform::from_xyz(globe_point.pos[0], globe_point.pos[1], globe_point.pos[2])
                     .looking_at(Vec3::ZERO, Vec3::Z),
             ));
