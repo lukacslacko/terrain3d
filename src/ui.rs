@@ -39,7 +39,7 @@ fn make_globe(config: &crate::state::Config) -> (GlobePoints, Mesh) {
     let mut normals = Vec::new();
     let mut indices = Vec::new();
 
-    let mut globe_points = GlobePoints::new(config.grid_size);
+    let mut globe_points = GlobePoints::default();
     let grid_size = config.grid_size;
 
     let m = grid_size + 1;
@@ -150,7 +150,6 @@ fn make_globe(config: &crate::state::Config) -> (GlobePoints, Mesh) {
                     GlobePoint {
                         pos: Vec3::from(render_pos),
                         water: height <= 0.0,
-                        snow: height >= snow,
                         penalty: if height <= 0.0 {
                             config.water_penalty
                         } else if height >= snow {
@@ -174,7 +173,7 @@ fn make_globe(config: &crate::state::Config) -> (GlobePoints, Mesh) {
     }
 
     println!("Building graph.");
-    globe_points.build_graph();
+    globe_points.build_graph(grid_size);
 
     println!("Making mesh.");
 
