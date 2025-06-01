@@ -48,9 +48,8 @@ impl GlobePoints {
     pub fn build_graph(&mut self, grid_size: u32) {
         let steps = 3i32;
         let size = grid_size as i32;
-        let mut pts_done = 0;
         let mut edges = 0;
-        for (&grid, &p) in &self.points {
+        for (pts_done, (&grid, &p)) in self.points.iter().enumerate() {
             if pts_done % 1000 == 0 {
                 println!(
                     "Building graph: {}/{}, edges {}",
@@ -59,7 +58,6 @@ impl GlobePoints {
                     edges
                 );
             }
-            pts_done += 1;
             if grid.1 as i32 >= steps
                 && (grid.1 as i32) < size - steps
                 && grid.2 as i32 >= steps
