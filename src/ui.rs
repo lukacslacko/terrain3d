@@ -149,11 +149,7 @@ fn make_globe(config: &crate::state::Config) -> (GlobePoints, Mesh) {
                     (face, i, j),
                     GlobePoint {
                         // pos: render_pos,
-                        pos: Vec3 {
-                            x: render_pos[0],
-                            y: render_pos[1],
-                            z: render_pos[2],
-                        },
+                        pos: Vec3::from(render_pos),
                         water: height <= 0.0,
                         snow: height >= snow,
                         penalty: if height <= 0.0 {
