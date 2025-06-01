@@ -148,7 +148,6 @@ fn make_globe(config: &crate::state::Config) -> (GlobePoints, Mesh) {
                 globe_points.points.insert(
                     (face, i, j),
                     GlobePoint {
-                        // pos: render_pos,
                         pos: Vec3::from(render_pos),
                         water: height <= 0.0,
                         snow: height >= snow,
@@ -336,8 +335,8 @@ fn on_mouse_right_click(
                 println!("Cities: {:?}", state.cities);
             }
 
-            let sz = state.config.city_marker_size;
-            let marker_mesh = meshes.add(Cuboid::new(sz, sz, sz));
+            let size = state.config.city_marker_size;
+            let marker_mesh = meshes.add(Cuboid::new(size, size, size));
             let marker_material = materials.add(state.config.city_marker_color);
             commands.spawn((
                 Mesh3d(marker_mesh),
