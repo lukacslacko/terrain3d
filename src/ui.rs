@@ -33,15 +33,15 @@ struct Globe;
 #[derive(Component)]
 struct MainCamera;
 
-fn make_globe(n: u32, globe_points: &mut GlobePoints, perlin_config: PerlinConfig) -> Mesh {
+fn make_globe(grid_size: u32, globe_points: &mut GlobePoints, perlin_config: PerlinConfig) -> Mesh {
     let mut positions = Vec::new();
     let mut colors = Vec::new();
     let mut normals = Vec::new();
     let mut indices = Vec::new();
 
-    globe_points.size = n;
+    globe_points.size = grid_size;
 
-    let m = n + 1;
+    let m = grid_size + 1;
 
     let perlin = Perlin {
         config: perlin_config,
@@ -53,8 +53,8 @@ fn make_globe(n: u32, globe_points: &mut GlobePoints, perlin_config: PerlinConfi
         println!("Making face {}", face);
         for i in 0..m {
             for j in 0..m {
-                let u = i as f32 / n as f32;
-                let v = j as f32 / n as f32;
+                let u = i as f32 / grid_size as f32;
+                let v = j as f32 / grid_size as f32;
                 let sphere = |u: f32, v: f32| {
                     let x = u - 0.5;
                     let y = v - 0.5;
@@ -154,8 +154,8 @@ fn make_globe(n: u32, globe_points: &mut GlobePoints, perlin_config: PerlinConfi
                 );
             }
         }
-        for i in 0..n {
-            for j in 0..n {
+        for i in 0..grid_size {
+            for j in 0..grid_size {
                 let a = i + m * j + face * m * m;
                 let b = a + 1;
                 let c = a + m + 1;
@@ -188,7 +188,11 @@ fn startup(
     mut state: ResMut<State>,
 ) {
     let perlin_config = state.config.perlin_config.clone();
-    let mesh = make_globe(state.config.n, &mut state.globe_points, perlin_config);
+    let mesh = make_globe(
+        state.config.grid_size,
+        &mut state.globe_points,
+        perlin_config,
+    );
     let cube = meshes.add(mesh);
     let material = materials.add(StandardMaterial {
         base_color: Color::WHITE,
@@ -304,7 +308,7 @@ fn on_mouse_right_click(
         .filter_map(|interaction| interaction.get_nearest_hit())
         .filter_map(|(_entity, hit)| hit.position)
     {
-        let gridpoint = get_closest_gridpoint(point, state.globe_points.size);
+        let gridpoint = get_closest_gridpoint(point, state.config.grid_size);
         if let Some(&globe_point) = state.globe_points.points.get(&gridpoint) {
             if globe_point.water {
                 println!("Can't place city on water: {:?}", gridpoint);
@@ -341,7 +345,7 @@ fn argmax(v: Vec3) -> usize {
     }
 }
 
-fn get_closest_gridpoint(pos: Vec3, n: u32) -> GridPoint {
+fn get_closest_gridpoint(pos: Vec3, grid_size: u32) -> GridPoint {
     let idx = argmax(pos.abs());
     let sign_at_max = if pos[idx] < 0.0 { -1 } else { 1 };
 
@@ -379,8 +383,8 @@ fn get_closest_gridpoint(pos: Vec3, n: u32) -> GridPoint {
         5 => Vec2::new(-norm_pos.x, -norm_pos.z),
         _ => unreachable!(),
     };
-    let grid_x = ((xy.x + 0.5) * n as f32).round() as u32;
-    let grid_y = ((xy.y + 0.5) * n as f32).round() as u32;
+    let grid_x = ((xy.x + 0.5) * grid_size as f32).round() as u32;
+    let grid_y = ((xy.y + 0.5) * grid_size as f32).round() as u32;
 
     let gridpoint = (face, grid_x, grid_y);
     if cfg!(debug_assertions) {

@@ -5,14 +5,14 @@ use bevy::prelude::*;
 
 #[derive(Debug)]
 pub struct Config {
-    pub n: u32,
+    pub grid_size: u32,
     pub perlin_config: perlin::PerlinConfig,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
-            n: 128,
+            grid_size: 128,
             perlin_config: perlin::PerlinConfig {
                 seed: 5,
                 frequency: 2.0,
