@@ -264,7 +264,7 @@ fn startup(
 
     create_path(
         &mut commands,
-        &state,
+        &mut state,
         path_mesh_handle.clone(),
         path_material_handle.clone(),
         (2, 0, 0),
@@ -301,14 +301,14 @@ fn startup(
 
 fn create_path(
     commands: &mut Commands<'_, '_>,
-    state: &State,
+    state: &mut State,
     mesh: Handle<Mesh>,
     material: Handle<StandardMaterial>,
     start: GridPoint,
     end: GridPoint,
 ) {
     println!("Dijkstra");
-    let path = dijkstra(start, end, &state.globe_points);
+    let path = dijkstra(start, end, &mut state.globe_points, state.config.reduction_factor);
     println!("Dijkstra done, path length: {}", path.len());
 
     for point in path.iter() {
@@ -406,7 +406,7 @@ fn on_mouse_right_click(
                 let second_last_city = *state.cities.get(state.cities.len() - 2).unwrap();
                 create_path(
                     &mut commands,
-                    &state,
+                    &mut state,
                     path_mesh.handle.clone(),
                     path_material.handle.clone(),
                     second_last_city,
