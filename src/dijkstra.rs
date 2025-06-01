@@ -41,7 +41,11 @@ fn cubic(grid: GridPoint, size: u32) -> [i32; 3] {
 
 fn cost(p: &GlobePoint, q: &GlobePoint) -> f32 {
     let penalty = p.penalty.max(q.penalty);
-    p.pos.distance(q.pos) * penalty
+    let p_height = p.pos.length();
+    let q_height = q.pos.length();
+    let climbing_cost = 5.0;
+    let unscaled_cost = p.pos.distance(q.pos) + climbing_cost * (p_height - q_height).abs();
+    unscaled_cost * penalty
 }
 
 impl GlobePoints {
