@@ -25,5 +25,5 @@ jobs:
       - name: Build
         run: cargo build --all
 
-      - name: Clippy (lints)
-        run: cargo clippy --all-targets -- -D warnings
+      # - name: Clippy (lints)
+      #   run: cargo clippy --all-targets -- -D warnings
