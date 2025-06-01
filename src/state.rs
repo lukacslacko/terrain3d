@@ -28,7 +28,7 @@ impl Default for Config {
             water_penalty: 5.0,
             snow_penalty: 3.0,
             min_city_distance: 0.5,
-            city_marker_size: 0.2,
+            city_marker_size: 0.1,
             city_marker_color: Color::srgb_u8(124, 144, 255),
         }
     }

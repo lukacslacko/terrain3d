@@ -34,13 +34,23 @@ struct Globe;
 struct MainCamera;
 
 #[derive(Resource)]
-struct MainMaterialHandle {
+struct CityMaterialHandle {
     handle: Handle<StandardMaterial>,
 }
 
 #[derive(Resource)]
-struct CityMaterialHandle {
+struct PathMaterialHandle {
     handle: Handle<StandardMaterial>,
+}
+
+#[derive(Resource)]
+struct CityMeshHandle {
+    handle: Handle<Mesh>,
+}
+
+#[derive(Resource)]
+struct PathMeshHandle {
+    handle: Handle<Mesh>,
 }
 
 fn make_globe(config: &crate::state::Config) -> (GlobePoints, Mesh) {
@@ -201,17 +211,15 @@ fn startup(
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut state: ResMut<State>,
 ) {
-    let (globe_points, mesh) = make_globe(&state.config);
+    let (globe_points, globe_mesh) = make_globe(&state.config);
     state.globe_points = globe_points;
-    let cube = meshes.add(mesh);
-    let material = materials.add(StandardMaterial {
+    let globe_mesh_handle = meshes.add(globe_mesh);
+
+    let globe_material = materials.add(StandardMaterial {
         base_color: Color::WHITE,
         perceptual_roughness: 0.0,
         metallic: 0.0,
         ..default()
-    });
-    commands.insert_resource(MainMaterialHandle {
-        handle: material.clone(),
     });
 
     commands.insert_resource(CityMaterialHandle {
@@ -223,10 +231,36 @@ fn startup(
         }),
     });
 
+    let path_material_handle = materials.add(StandardMaterial {
+        base_color: Color::srgb_u8(165, 165, 165),
+        perceptual_roughness: 0.0,
+        metallic: 0.0,
+        ..default()
+    });
+    commands.insert_resource(PathMaterialHandle {
+        handle: path_material_handle.clone(),
+    });
+
+    let path_mesh_handle = meshes.add(Sphere {
+        radius: 0.1,
+        ..default()
+    });
+    commands.insert_resource(PathMeshHandle {
+        handle: path_mesh_handle.clone(),
+    });
+
+    let city_mesh_handle = meshes.add(Cuboid {
+        half_size: Vec3::splat(state.config.city_marker_size),
+        ..default()
+    });
+    commands.insert_resource(CityMeshHandle {
+        handle: city_mesh_handle.clone(),
+    });
+
     println!("Spawning globe.");
     commands.spawn((
-        Mesh3d(cube),
-        MeshMaterial3d(material.clone()),
+        Mesh3d(globe_mesh_handle),
+        MeshMaterial3d(globe_material.clone()),
         Transform::from_xyz(0.0, 0.0, 0.0),
         Globe,
     ));
@@ -234,9 +268,9 @@ fn startup(
 
     create_path(
         &mut commands,
-        meshes.as_mut(),
         &state,
-        material,
+        path_mesh_handle.clone(),
+        path_material_handle.clone(),
         (2, 0, 0),
         (3, 0, 0),
     );
@@ -271,8 +305,8 @@ fn startup(
 
 fn create_path(
     commands: &mut Commands<'_, '_>,
-    meshes: &mut Assets<Mesh>,
     state: &State,
+    mesh: Handle<Mesh>,
     material: Handle<StandardMaterial>,
     start: GridPoint,
     end: GridPoint,
@@ -283,9 +317,8 @@ fn create_path(
 
     for point in path.iter() {
         let pos = &state.globe_points.points[point];
-        let s = meshes.add(Sphere::new(0.1));
         commands.spawn((
-            Mesh3d(s),
+            Mesh3d(mesh.clone()),
             MeshMaterial3d(material.clone()),
             Transform::from_xyz(pos.pos[0], pos.pos[1], pos.pos[2]),
             PointerInteraction::default(),
@@ -338,9 +371,10 @@ fn on_mouse_right_click(
     pointers: Query<&PointerInteraction>,
     mut state: ResMut<State>,
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    city_marker_material: Res<CityMaterialHandle>,
-    main_material: Res<MainMaterialHandle>,
+    city_mesh: Res<CityMeshHandle>,
+    city_material: Res<CityMaterialHandle>,
+    path_mesh: Res<PathMeshHandle>,
+    path_material: Res<PathMaterialHandle>,
 ) {
     for point in pointers
         .iter()
@@ -376,19 +410,17 @@ fn on_mouse_right_click(
                 let second_last_city = *state.cities.get(state.cities.len() - 2).unwrap();
                 create_path(
                     &mut commands,
-                    meshes.as_mut(),
                     &state,
-                    main_material.handle.clone(),
+                    path_mesh.handle.clone(),
+                    path_material.handle.clone(),
                     second_last_city,
                     last_city,
                 );
             }
 
-            let size = state.config.city_marker_size;
-            let marker_mesh = meshes.add(Cuboid::new(size, size, size));
             commands.spawn((
-                Mesh3d(marker_mesh),
-                MeshMaterial3d(city_marker_material.handle.clone()),
+                Mesh3d(city_mesh.handle.clone()),
+                MeshMaterial3d(city_material.handle.clone()),
                 Transform::from_xyz(globe_point.pos[0], globe_point.pos[1], globe_point.pos[2])
                     .looking_at(Vec3::ZERO, Vec3::Z),
             ));
