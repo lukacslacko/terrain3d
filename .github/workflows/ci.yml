@@ -20,7 +20,7 @@ jobs:
           override: true
 
       - name: Build
-        run: cargo build --all --warnings=deny
+        run: cargo build --all
 
       - name: Clippy (lints)
         run: cargo clippy --all-targets -- -D warnings
