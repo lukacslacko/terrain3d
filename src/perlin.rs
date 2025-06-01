@@ -1,5 +1,7 @@
 use statrs::distribution::{ContinuousCDF, Normal};
-pub struct Perlin {
+
+#[derive(Debug, Clone, Copy)]
+pub struct PerlinConfig {
     pub seed: u32,
     pub frequency: f32,
     pub lacunarity: f32,
@@ -7,25 +9,29 @@ pub struct Perlin {
     pub octaves: u32,
 }
 
+pub struct Perlin {
+    pub config: PerlinConfig,
+}
+
 impl Perlin {
     pub fn noise(&self, x: f32, y: f32, z: f32) -> f32 {
         let mut total = 0.0;
-        let mut frequency = self.frequency;
+        let mut frequency = self.config.frequency;
         let mut amplitude = 1.0;
 
-        for _ in 0..self.octaves {
+        for _ in 0..self.config.octaves {
             total += self.single_layer(x * frequency, y * frequency, z * frequency) * amplitude;
-            frequency *= self.lacunarity;
-            amplitude *= self.persistence;
+            frequency *= self.config.lacunarity;
+            amplitude *= self.config.persistence;
         }
 
         total
     }
 
     fn single_layer(&self, x: f32, y: f32, z: f32) -> f32 {
-        let x = x + self.seed as f32;
-        let y = y + self.seed as f32;
-        let z = z + self.seed as f32;
+        let x = x + self.config.seed as f32;
+        let y = y + self.config.seed as f32;
+        let z = z + self.config.seed as f32;
 
         let xi = x.floor() as i32;
         let yi = y.floor() as i32;
