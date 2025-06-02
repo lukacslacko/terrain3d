@@ -327,7 +327,6 @@ fn create_path(
                 let cylinder = Mesh::from(Cylinder {
                     radius: 0.05,
                     half_height: length / 2.0,
-                    ..default()
                 });
                 commands.spawn((
                     Mesh3d(meshes.add(cylinder)),
