@@ -1,5 +1,5 @@
 @echo off
-REM build-wasm.bat: Build the Bevy app for WebAssembly and output to dist/
+REM build-wasm.bat: Build the Bevy app for WebAssembly and output to docs/
 
 where trunk >nul 2>nul
 if %ERRORLEVEL% NEQ 0 (
@@ -10,5 +10,5 @@ if %ERRORLEVEL% NEQ 0 (
 cargo install wasm-opt
 
 rustup target add wasm32-unknown-unknown
-trunk build --release --public-url terrain3d --filehash false
-wasm-opt -Oz -o dist/terrain3d_bg.wasm dist/terrain3d_bg.wasm
+trunk build --release --public-url terrain3d --filehash false --dist docs
+wasm-opt -Oz -o docs/terrain3d_bg.wasm docs/terrain3d_bg.wasm
