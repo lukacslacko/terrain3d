@@ -48,11 +48,6 @@ struct CityMeshHandle {
     handle: Handle<Mesh>,
 }
 
-#[derive(Resource)]
-struct PathMeshHandle {
-    handle: Handle<Mesh>,
-}
-
 fn make_globe(config: &crate::state::Config) -> (GlobePoints, Mesh) {
     let mut positions = Vec::new();
     let mut colors = Vec::new();
@@ -241,11 +236,6 @@ fn startup(
         handle: path_material_handle.clone(),
     });
 
-    let path_mesh_handle = meshes.add(Sphere { radius: 0.1 });
-    commands.insert_resource(PathMeshHandle {
-        handle: path_mesh_handle.clone(),
-    });
-
     let city_mesh_handle = meshes.add(Cuboid {
         half_size: Vec3::splat(state.config.city_marker_size),
     });
@@ -283,7 +273,7 @@ fn startup(
 fn create_path(
     commands: &mut Commands<'_, '_>,
     state: &mut State,
-    mesh: Handle<Mesh>,
+    meshes: &mut ResMut<Assets<Mesh>>,
     material: Handle<StandardMaterial>,
     start: GridPoint,
     end: GridPoint,
@@ -315,14 +305,28 @@ fn create_path(
 
     println!("Dijkstra done, path length: {}", path.len());
 
-    for point in path.iter() {
-        let pos = &state.globe_points.points[point];
-        commands.spawn((
-            Mesh3d(mesh.clone()),
-            MeshMaterial3d(material.clone()),
-            Transform::from_xyz(pos.pos[0], pos.pos[1], pos.pos[2]),
-            PointerInteraction::default(),
-        ));
+    for line in path.windows(2) {
+        let (from, to) = (line[0], line[1]);
+        if let Some(from_point) = state.globe_points.points.get(&from) {
+            if let Some(to_point) = state.globe_points.points.get(&to) {
+                // Create cylinder mesh connecting from_point to to_point.
+                let direction = to_point.pos - from_point.pos;
+                let length = direction.length();
+                let mid_point = (from_point.pos + to_point.pos) / 2.0;
+                let rotation = Quat::from_rotation_arc(Vec3::Y, direction.normalize());
+                let cylinder = Mesh::from(Cylinder {
+                    radius: 0.05,
+                    half_height: length / 2.0,
+                });
+                commands.spawn((
+                    Mesh3d(meshes.add(cylinder)),
+                    MeshMaterial3d(material.clone()),
+                    Transform::from_translation(mid_point)
+                        .with_rotation(rotation),
+                    PointerInteraction::default(),
+                ));
+            }
+        }
     }
 }
 
@@ -377,9 +381,9 @@ fn on_mouse_right_click(
     pointers: Query<&PointerInteraction>,
     mut state: ResMut<State>,
     mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
     city_mesh: Res<CityMeshHandle>,
     city_material: Res<CityMaterialHandle>,
-    path_mesh: Res<PathMeshHandle>,
     path_material: Res<PathMaterialHandle>,
 ) {
     for point in pointers
@@ -417,7 +421,7 @@ fn on_mouse_right_click(
                 create_path(
                     &mut commands,
                     &mut state,
-                    path_mesh.handle.clone(),
+                    &mut meshes,
                     path_material.handle.clone(),
                     second_last_city,
                     last_city,
