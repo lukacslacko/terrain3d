@@ -272,16 +272,6 @@ fn startup(
         },
         Transform::from_xyz(0.0, 5.0, 20.0),
     ));
-    commands.spawn((
-        PointLight {
-            shadows_enabled: true,
-            intensity: 10_000_000.0,
-            range: 100.0,
-            // shadow_depth_bias: 0.2,
-            ..default()
-        },
-        Transform::from_xyz(0.0, -5.0, -20.0),
-    ));
 
     commands.spawn((
         Camera3d::default(),
@@ -323,7 +313,6 @@ fn create_path(
         }
     }
 
-
     println!("Dijkstra done, path length: {}", path.len());
 
     for point in path.iter() {
@@ -340,6 +329,7 @@ fn create_path(
 fn rotate_on_drag(
     mut motion_event_reader: EventReader<MouseMotion>,
     mut camera_transform: Query<(&mut Transform, &MainCamera)>,
+    mut lights_transform: Query<(&mut Transform, &PointLight), Without<MainCamera>>,
 ) {
     let (dx, dy) = motion_event_reader
         .read()
@@ -366,6 +356,11 @@ fn rotate_on_drag(
     // Step 3: Update position and look at the origin
     transform.translation = origin + new_direction.normalize() * radius;
     transform.look_at(origin, up);
+
+    for mut light_transform in lights_transform.iter_mut() {
+        let above_camera = transform.translation + transform.up() * 5.0;
+        light_transform.0.translation = above_camera;
+    }
 }
 
 fn draw_pointer(pointers: Query<&PointerInteraction>, mut gizmos: Gizmos) {
