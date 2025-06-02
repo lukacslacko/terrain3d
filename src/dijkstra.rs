@@ -9,6 +9,7 @@ pub type GridPoint = (u32, u32, u32);
 pub struct Edge {
     pub to: GridPoint,
     pub cost: f32,
+    pub discounted: bool, // true if cost reduction has been applied
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -83,6 +84,7 @@ impl GlobePoints {
                             self.graph.entry(grid).or_default().push(Edge {
                                 to: neighbor,
                                 cost: cost(&p, &q, climbing_cost),
+                                discounted: false,
                             });
                             edges += 1;
                         }
@@ -101,6 +103,7 @@ impl GlobePoints {
                     self.graph.entry(grid).or_default().push(Edge {
                         to: neighbor,
                         cost: cost(&p, &q, climbing_cost),
+                        discounted: false,
                     });
                     edges += 1;
                 }

@@ -262,15 +262,6 @@ fn startup(
     ));
     println!("Globe spawned.");
 
-    create_path(
-        &mut commands,
-        &state,
-        path_mesh_handle.clone(),
-        path_material_handle.clone(),
-        (2, 0, 0),
-        (3, 0, 0),
-    );
-
     commands.spawn((
         PointLight {
             shadows_enabled: true,
@@ -301,7 +292,7 @@ fn startup(
 
 fn create_path(
     commands: &mut Commands<'_, '_>,
-    state: &State,
+    state: &mut State,
     mesh: Handle<Mesh>,
     material: Handle<StandardMaterial>,
     start: GridPoint,
@@ -309,6 +300,30 @@ fn create_path(
 ) {
     println!("Dijkstra");
     let path = dijkstra(start, end, &state.globe_points);
+
+    let reduction_factor = state.config.reduction_factor;
+    // Apply cost reduction to edges in the path (only once per edge)
+    for w in path.windows(2) {
+        let (from, to) = (w[1], w[0]);
+        if let Some(edges) = state.globe_points.graph.get_mut(&from) {
+            for edge in edges.iter_mut() {
+                if edge.to == to && !edge.discounted {
+                    edge.cost /= reduction_factor;
+                    edge.discounted = true;
+                }
+            }
+        }
+        if let Some(edges) = state.globe_points.graph.get_mut(&to) {
+            for edge in edges.iter_mut() {
+                if edge.to == from && !edge.discounted {
+                    edge.cost /= reduction_factor;
+                    edge.discounted = true;
+                }
+            }
+        }
+    }
+
+
     println!("Dijkstra done, path length: {}", path.len());
 
     for point in path.iter() {
@@ -406,7 +421,7 @@ fn on_mouse_right_click(
                 let second_last_city = *state.cities.get(state.cities.len() - 2).unwrap();
                 create_path(
                     &mut commands,
-                    &state,
+                    &mut state,
                     path_mesh.handle.clone(),
                     path_material.handle.clone(),
                     second_last_city,
