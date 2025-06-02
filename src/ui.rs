@@ -308,7 +308,31 @@ fn create_path(
     end: GridPoint,
 ) {
     println!("Dijkstra");
-    let path = dijkstra(start, end, &mut state.globe_points, state.config.reduction_factor);
+    let path = dijkstra(start, end, &mut state.globe_points);
+
+    let reduction_factor = state.config.reduction_factor;
+    // Apply cost reduction to edges in the path (only once per edge)
+    for w in path.windows(2) {
+        let (from, to) = (w[1], w[0]);
+        if let Some(edges) = state.globe_points.graph.get_mut(&from) {
+            for edge in edges.iter_mut() {
+                if edge.to == to && !edge.discounted {
+                    edge.cost /= reduction_factor;
+                    edge.discounted = true;
+                }
+            }
+        }
+        if let Some(edges) = state.globe_points.graph.get_mut(&to) {
+            for edge in edges.iter_mut() {
+                if edge.to == from && !edge.discounted {
+                    edge.cost /= reduction_factor;
+                    edge.discounted = true;
+                }
+            }
+        }
+    }
+
+
     println!("Dijkstra done, path length: {}", path.len());
 
     for point in path.iter() {
