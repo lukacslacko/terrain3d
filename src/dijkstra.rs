@@ -39,17 +39,16 @@ fn cubic(grid: GridPoint, size: u32) -> [i32; 3] {
     }
 }
 
-fn cost(p: &GlobePoint, q: &GlobePoint) -> f32 {
+fn cost(p: &GlobePoint, q: &GlobePoint, climbing_cost: f32) -> f32 {
     let penalty = p.penalty.max(q.penalty);
     let p_height = p.pos.length();
     let q_height = q.pos.length();
-    let climbing_cost = 5.0;
     let unscaled_cost = p.pos.distance(q.pos) + climbing_cost * (p_height - q_height).abs();
     unscaled_cost * penalty
 }
 
 impl GlobePoints {
-    pub fn build_graph(&mut self, grid_size: u32) {
+    pub fn build_graph(&mut self, grid_size: u32, climbing_cost: f32) {
         let steps = 3i32;
         let size = grid_size as i32;
         let mut edges = 0;
@@ -83,7 +82,7 @@ impl GlobePoints {
                         if let Some(&q) = self.points.get(&neighbor) {
                             self.graph.entry(grid).or_default().push(Edge {
                                 to: neighbor,
-                                cost: cost(&p, &q),
+                                cost: cost(&p, &q, climbing_cost),
                             });
                             edges += 1;
                         }
@@ -101,7 +100,7 @@ impl GlobePoints {
                     }
                     self.graph.entry(grid).or_default().push(Edge {
                         to: neighbor,
-                        cost: cost(&p, &q),
+                        cost: cost(&p, &q, climbing_cost),
                     });
                     edges += 1;
                 }
