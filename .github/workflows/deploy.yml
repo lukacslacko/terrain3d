@@ -28,15 +28,15 @@ jobs:
         run: rustup target add wasm32-unknown-unknown
 
       - name: Build (WASM)
-        run: trunk build --release --public-url terrain3d --filehash false
+        run: trunk build --release --public-url terrain3d --filehash false --dist docs
 
       - name: Optimize WASM
-        run: wasm-opt -Oz -o dist/terrain3d_bg.wasm dist/terrain3d_bg.wasm
+        run: wasm-opt -Oz -o docs/terrain3d_bg.wasm docs/terrain3d_bg.wasm
 
       - name: Commit and push built files
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add dist/
+          git add docs/
           git commit -m "Update GitHub Pages build [skip ci]" || echo "No changes to commit"
           git push
