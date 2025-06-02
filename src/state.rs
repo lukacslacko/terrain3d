@@ -13,6 +13,7 @@ pub struct Config {
     pub city_marker_size: f32,
     pub city_marker_color: Color,
     pub reduction_factor: f32, // cost reduction factor for reused edges
+    pub climbing_cost: f32,
 }
 
 impl Default for Config {
@@ -32,6 +33,7 @@ impl Default for Config {
             city_marker_size: 0.1,
             city_marker_color: Color::srgb_u8(124, 144, 255),
             reduction_factor: 2.0, // default reduction factor
+            climbing_cost: 5.0,
         }
     }
 }
