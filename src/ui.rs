@@ -262,15 +262,6 @@ fn startup(
     ));
     println!("Globe spawned.");
 
-    create_path(
-        &mut commands,
-        &mut state,
-        path_mesh_handle.clone(),
-        path_material_handle.clone(),
-        (2, 0, 0),
-        (3, 0, 0),
-    );
-
     commands.spawn((
         PointLight {
             shadows_enabled: true,
@@ -308,7 +299,7 @@ fn create_path(
     end: GridPoint,
 ) {
     println!("Dijkstra");
-    let path = dijkstra(start, end, &mut state.globe_points);
+    let path = dijkstra(start, end, &state.globe_points);
 
     let reduction_factor = state.config.reduction_factor;
     // Apply cost reduction to edges in the path (only once per edge)
