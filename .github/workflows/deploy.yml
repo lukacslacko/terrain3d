@@ -28,7 +28,7 @@ jobs:
         run: rustup target add wasm32-unknown-unknown
 
       - name: Build (WASM)
-        run: trunk build --release --public-url terrain3d
+        run: trunk build --release --public-url terrain3d --filehash false
 
       - name: Optimize WASM
         run: wasm-opt -Oz -o dist/terrain3d_bg.wasm dist/terrain3d_bg.wasm
