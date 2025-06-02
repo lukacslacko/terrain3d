@@ -8,6 +8,8 @@ if ! command -v trunk &> /dev/null; then
     cargo install trunk
 fi
 
+rustup target add wasm32-unknown-unknown
+
 # Build the app to docs/
 trunk build --release --public-url terrain3d --dist docs
 

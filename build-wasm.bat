@@ -7,6 +7,6 @@ if %ERRORLEVEL% NEQ 0 (
     cargo install trunk
 )
 
-trunk build --release --public-url terrain3d --dist docs
+rustup target add wasm32-unknown-unknown
+trunk build --release --public-url terrain3d 
 
-echo WASM build complete. Output is in .\docs.

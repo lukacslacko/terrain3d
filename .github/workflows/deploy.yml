@@ -21,6 +21,8 @@ jobs:
         run: cargo install trunk
       - name: Install wasm-bindgen-cli
         run: cargo install wasm-bindgen-cli
+      - name: Add WASM target
+        run: rustup target add wasm32-unknown-unknown
       - name: Build (WASM)
         run: trunk build --release --public-url terrain3d --dist docs
       - name: Commit and push built files
