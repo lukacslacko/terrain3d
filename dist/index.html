@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>terrain3d WebGL</title>
+<link rel="modulepreload" href="terrain3d/terrain3d.js" crossorigin="anonymous" integrity="sha384-c8Z2oi1x9Hc0wMzC4y0zlmiFx3VT0uP95PQr86eyKJxagx9WrrmEG8dWTbxR3RVI"><link rel="preload" href="terrain3d/terrain3d_bg.wasm" crossorigin="anonymous" integrity="sha384-Sce0aMShEuJWV655LvporpACpbyqOHgp5Ai2j6JMmphHrQwOR1aQXYoFaAKmECAU" as="fetch" type="application/wasm"></head>
+<body>
+    <script type="module">
+        import init from './terrain3d.js';
+        init();
+    </script>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+
+<script type="module">
+import init, * as bindings from 'terrain3d/terrain3d.js';
+const wasm = await init({ module_or_path: 'terrain3d/terrain3d_bg.wasm' });
+
+
+window.wasmBindings = bindings;
+
+
+dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
+
+</script></body>
+</html>
