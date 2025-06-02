@@ -17,7 +17,7 @@ To build the Bevy app for WebAssembly and output to the `dist/` directory (for l
 
 The output will be in the `dist/` directory. You can serve this directory locally with 
 ```
-trunk server --release --filehash=false
+trunk serve --release --filehash=false
 ```
 to test the WASM build.
 
