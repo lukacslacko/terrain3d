@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# build-wasm.sh: Build the Bevy app for WebAssembly and output to docs/
+# build-wasm.sh: Build the Bevy app for WebAssembly and output to dist/
 set -e
 
 # Ensure trunk is installed
@@ -8,9 +8,9 @@ if ! command -v trunk &> /dev/null; then
     cargo install trunk
 fi
 
+cargo install wasm-opt
+
 rustup target add wasm32-unknown-unknown
 
-# Build the app to docs/
-trunk build --release --public-url terrain3d --dist docs
-
-echo "WASM build complete. Output is in ./docs."
+trunk build --release --public-url terrain3d --filehash false
+wasm-opt -Oz -o dist/terrain3d_bg.wasm dist/terrain3d_bg.wasm
