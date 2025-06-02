@@ -190,7 +190,7 @@ fn make_globe(config: &crate::state::Config) -> (GlobePoints, Mesh) {
     }
 
     println!("Building graph.");
-    globe_points.build_graph(grid_size);
+    globe_points.build_graph(grid_size, config.climbing_cost);
 
     println!("Making mesh.");
 
