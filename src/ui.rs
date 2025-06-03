@@ -48,6 +48,11 @@ struct CityMeshHandle {
     handle: Handle<Mesh>,
 }
 
+#[derive(Resource)]
+struct PathMeshHandle {
+    handle: Handle<Mesh>,
+}
+
 fn make_globe(config: &crate::state::Config) -> (GlobePoints, Mesh) {
     let mut positions = Vec::new();
     let mut colors = Vec::new();
@@ -227,7 +232,7 @@ fn startup(
     });
 
     let path_material_handle = materials.add(StandardMaterial {
-        base_color: Color::srgb_u8(165, 165, 165),
+        base_color: Color::srgb_u8(255, 165, 165),
         perceptual_roughness: 0.0,
         metallic: 0.0,
         ..default()
@@ -241,6 +246,13 @@ fn startup(
     });
     commands.insert_resource(CityMeshHandle {
         handle: city_mesh_handle.clone(),
+    });
+
+    commands.insert_resource(PathMeshHandle {
+        handle: meshes.add(Capsule3d {
+            half_length: 0.5,
+            radius: 0.05,
+        }),
     });
 
     println!("Spawning globe.");
@@ -273,8 +285,8 @@ fn startup(
 fn create_path(
     commands: &mut Commands<'_, '_>,
     state: &mut State,
-    meshes: &mut ResMut<Assets<Mesh>>,
     material: Handle<StandardMaterial>,
+    cylinder: Handle<Mesh>,
     start: GridPoint,
     end: GridPoint,
 ) {
@@ -314,15 +326,16 @@ fn create_path(
                 let length = direction.length();
                 let mid_point = (from_point.pos + to_point.pos) / 2.0;
                 let rotation = Quat::from_rotation_arc(Vec3::Y, direction.normalize());
-                let cylinder = Mesh::from(Cylinder {
-                    radius: 0.05,
-                    half_height: length / 2.0,
-                });
                 commands.spawn((
-                    Mesh3d(meshes.add(cylinder)),
+                    Mesh3d(cylinder.clone()),
                     MeshMaterial3d(material.clone()),
-                    Transform::from_translation(mid_point)
-                        .with_rotation(rotation),
+                    Transform::from_scale(Vec3 {
+                        x: 1.0,
+                        y: length,
+                        z: 1.0,
+                    })
+                    .with_translation(mid_point)
+                    .with_rotation(rotation),
                     PointerInteraction::default(),
                 ));
             }
@@ -381,9 +394,9 @@ fn on_mouse_right_click(
     pointers: Query<&PointerInteraction>,
     mut state: ResMut<State>,
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
     city_mesh: Res<CityMeshHandle>,
     city_material: Res<CityMaterialHandle>,
+    path_mesh: Res<PathMeshHandle>,
     path_material: Res<PathMaterialHandle>,
 ) {
     for point in pointers
@@ -421,8 +434,8 @@ fn on_mouse_right_click(
                 create_path(
                     &mut commands,
                     &mut state,
-                    &mut meshes,
                     path_material.handle.clone(),
+                    path_mesh.handle.clone(),
                     second_last_city,
                     last_city,
                 );
