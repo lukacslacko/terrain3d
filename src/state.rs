@@ -3,7 +3,7 @@ use crate::perlin;
 
 use bevy::prelude::*;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Config {
     pub grid_size: u32,
     pub perlin_config: perlin::PerlinConfig,

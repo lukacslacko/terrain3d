@@ -9,6 +9,8 @@ use bevy::{
     prelude::*,
     render::mesh::{Mesh, Mesh3d},
 };
+use crossbeam_channel::{Receiver, bounded};
+use std::thread;
 
 pub fn init() {
     App::new()
@@ -24,6 +26,7 @@ pub fn init() {
         )
         .insert_resource(State::default())
         .add_systems(Update, draw_pointer)
+        .add_systems(Update, try_getting_globe)
         .run();
 }
 
@@ -46,6 +49,11 @@ struct PathMaterialHandle {
 #[derive(Resource)]
 struct CityMeshHandle {
     handle: Handle<Mesh>,
+}
+
+#[derive(Resource)]
+struct GlobeReceiver {
+    receiver: Receiver<(GlobePoints, Mesh)>,
 }
 
 fn make_globe(config: &crate::state::Config) -> (GlobePoints, Mesh) {
@@ -200,22 +208,49 @@ fn make_globe(config: &crate::state::Config) -> (GlobePoints, Mesh) {
     (globe_points, mesh)
 }
 
-fn startup(
+fn try_getting_globe(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut state: ResMut<State>,
+    globe_receiver: Res<GlobeReceiver>,
 ) {
-    let (globe_points, globe_mesh) = make_globe(&state.config);
-    state.globe_points = globe_points;
-    let globe_mesh_handle = meshes.add(globe_mesh);
+    if let Ok((globe_points, globe_mesh)) = globe_receiver.receiver.try_recv() {
+        println!("Received globe points and mesh.");
+        state.globe_points = globe_points;
+        let globe_mesh_handle = meshes.add(globe_mesh);
+        let globe_material = materials.add(StandardMaterial {
+            base_color: Color::WHITE,
+            perceptual_roughness: 0.0,
+            metallic: 0.0,
+            ..default()
+        });
 
-    let globe_material = materials.add(StandardMaterial {
-        base_color: Color::WHITE,
-        perceptual_roughness: 0.0,
-        metallic: 0.0,
-        ..default()
+        println!("Spawning globe.");
+        commands.spawn((
+            Mesh3d(globe_mesh_handle),
+            MeshMaterial3d(globe_material.clone()),
+            Transform::from_xyz(0.0, 0.0, 0.0),
+            Globe,
+        ));
+        println!("Globe spawned.");
+    }
+}
+
+fn startup(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    state: Res<State>,
+) {
+    let (tx, rx) = bounded(1);
+    let config_for_make_globe = state.config.clone();
+    thread::spawn(move || {
+        let (globe_points, globe_mesh) = make_globe(&config_for_make_globe);
+        tx.send((globe_points, globe_mesh)).unwrap();
     });
+
+    commands.insert_resource(GlobeReceiver { receiver: rx });
 
     commands.insert_resource(CityMaterialHandle {
         handle: materials.add(StandardMaterial {
@@ -242,15 +277,6 @@ fn startup(
     commands.insert_resource(CityMeshHandle {
         handle: city_mesh_handle.clone(),
     });
-
-    println!("Spawning globe.");
-    commands.spawn((
-        Mesh3d(globe_mesh_handle),
-        MeshMaterial3d(globe_material.clone()),
-        Transform::from_xyz(0.0, 0.0, 0.0),
-        Globe,
-    ));
-    println!("Globe spawned.");
 
     commands.spawn((
         PointLight {
@@ -321,8 +347,7 @@ fn create_path(
                 commands.spawn((
                     Mesh3d(meshes.add(cylinder)),
                     MeshMaterial3d(material.clone()),
-                    Transform::from_translation(mid_point)
-                        .with_rotation(rotation),
+                    Transform::from_translation(mid_point).with_rotation(rotation),
                     PointerInteraction::default(),
                 ));
             }
