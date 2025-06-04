@@ -128,7 +128,7 @@ impl GlobePoints {
                                 if let Some(q) = self.points.get(&neighbor) {
                                     self.graph.entry(grid).or_default().push(Edge {
                                         to: neighbor,
-                                        cost: cost(&p, &q, climbing_cost),
+                                        cost: cost(&p, q, climbing_cost),
                                         discounted: false,
                                     });
                                     edges += 1;
