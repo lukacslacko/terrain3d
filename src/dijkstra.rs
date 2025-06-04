@@ -62,50 +62,80 @@ impl GlobePoints {
                     edges
                 );
             }
-            if grid.1 as i32 >= steps
-                && (grid.1 as i32) < size - steps
-                && grid.2 as i32 >= steps
-                && (grid.2 as i32) < size - steps
-            {
-                for di in -steps..=steps {
-                    for dj in -steps..=steps {
-                        if di == 0 && dj == 0 {
-                            continue;
-                        }
-                        if di * di + dj * dj > steps * steps {
-                            continue;
-                        }
-                        let neighbor = (
-                            grid.0,
-                            (grid.1 as i32 + di) as u32,
-                            (grid.2 as i32 + dj) as u32,
-                        );
-                        if let Some(&q) = self.points.get(&neighbor) {
-                            self.graph.entry(grid).or_default().push(Edge {
-                                to: neighbor,
-                                cost: cost(&p, &q, climbing_cost),
-                                discounted: false,
-                            });
-                            edges += 1;
-                        }
-                    }
-                }
-            } else {
-                for (&neighbor, &q) in &self.points {
-                    let other = cubic(neighbor, grid_size);
-                    let this = cubic(grid, grid_size);
-                    let dist2 = (other[0] - this[0]).pow(2)
-                        + (other[1] - this[1]).pow(2)
-                        + (other[2] - this[2]).pow(2);
-                    if dist2 > steps * steps || dist2 == 0 {
+            for di in -steps..=steps {
+                for dj in -steps..=steps {
+                    if di == 0 && dj == 0 {
                         continue;
                     }
-                    self.graph.entry(grid).or_default().push(Edge {
-                        to: neighbor,
-                        cost: cost(&p, &q, climbing_cost),
-                        discounted: false,
-                    });
-                    edges += 1;
+                    if di * di + dj * dj > steps * steps {
+                        continue;
+                    }
+                    let neighbor = (
+                        grid.0,
+                        (grid.1 as i32 + di) as u32,
+                        (grid.2 as i32 + dj) as u32,
+                    );
+                    if let Some(&q) = self.points.get(&neighbor) {
+                        self.graph.entry(grid).or_default().push(Edge {
+                            to: neighbor,
+                            cost: cost(&p, &q, climbing_cost),
+                            discounted: false,
+                        });
+                        edges += 1;
+                    }
+                }
+            }
+            if !(grid.1 as i32 >= steps
+                && (grid.1 as i32) <= size - steps
+                && grid.2 as i32 >= steps
+                && (grid.2 as i32) <= size - steps)
+            {
+                // We're within `steps` of the edge of a face, and we want to step at most `steps` far,
+                // so the next point is either on our face, within steps of us (checked above), or on a
+                // different face, within `steps`` of the edge that face.
+                let this = cubic(grid, grid_size);
+                for big in 0..=grid_size as i32 {
+                    for small in 0..=steps {
+                        for which_edge in 0..4 {
+                            for other_face in 0..6 {
+                                if other_face == grid.0 {
+                                    continue; // skip the same face
+                                }
+                                let neighbor = (
+                                    other_face,
+                                    match which_edge {
+                                        0 => small,
+                                        1 => grid_size as i32 - small,
+                                        2 => big,
+                                        3 => grid_size as i32 - big,
+                                        _ => unreachable!(),
+                                    } as u32,
+                                    match which_edge {
+                                        0 => big,
+                                        1 => grid_size as i32 - big,
+                                        2 => small,
+                                        3 => grid_size as i32 - small,
+                                        _ => unreachable!(),
+                                    } as u32,
+                                );
+                                let other = cubic(neighbor, grid_size);
+                                let dist2 = (other[0] - this[0]).pow(2)
+                                    + (other[1] - this[1]).pow(2)
+                                    + (other[2] - this[2]).pow(2);
+                                if dist2 > steps * steps || dist2 == 0 {
+                                    continue;
+                                }
+                                if let Some(q) = self.points.get(&neighbor) {
+                                    self.graph.entry(grid).or_default().push(Edge {
+                                        to: neighbor,
+                                        cost: cost(&p, q, climbing_cost),
+                                        discounted: false,
+                                    });
+                                    edges += 1;
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
