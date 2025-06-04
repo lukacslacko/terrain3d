@@ -3982,6 +3982,7 @@ name = "terrain3d"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "crossbeam-channel",
  "ordered-float 5.0.0",
  "priority-queue",
  "statrs",
