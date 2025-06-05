@@ -6,6 +6,10 @@ on:
   #  branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -13,6 +17,11 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
+
+      - name: Set up GitHub cli
+        uses: cli/cli-action@v2
+        with:
+          version: latest
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
@@ -35,10 +44,38 @@ jobs:
       - name: Optimize WASM
         run: wasm-opt -Oz -o docs/terrain3d_bg.wasm docs/terrain3d_bg.wasm
 
-      - name: Commit and push built files
+      - name: Configure Git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create update branch
+        run: |
+          BRANCH="pages-update-$(date +'%Y%m%d%H%M%S')"
+          git checkout -b $BRANCH
           git add docs/
           git commit -m "Update GitHub Pages build [skip ci]" || echo "No changes to commit"
-          git push
+          git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:$BRANCH
+          echo "BRANCH=$BRANCH" >> $GITHUB_ENV
+
+      - name: Create Pull Request
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_URL=$(gh pr create --title "Update GitHub Pages build" \
+            --body "Automated update from CI" \
+            --base main \
+            --head ${{ steps.create_branch.outputs.branch_name }} \
+            --repo ${{ github.repository }} \
+            --fill)
+          echo "pr_url=$PR_URL" >> $GITHUB_OUTPUT
+
+        - name: Merge Pull Request
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get PR number from the URL
+          PR_NUMBER=$(basename ${{ steps.create_pr.outputs.pr_url }})
+          
+          # Try merging the PR
+          gh pr merge $PR_NUMBER --merge --delete-branch --repo ${{ github.repository }}
