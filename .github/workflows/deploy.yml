@@ -68,7 +68,7 @@ jobs:
             --fill)
           echo "pr_url=$PR_URL" >> $GITHUB_OUTPUT
 
-        - name: Merge Pull Request
+      - name: Merge Pull Request
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
