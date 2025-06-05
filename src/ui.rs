@@ -28,6 +28,7 @@ pub fn init() {
             Update,
             on_mouse_left_click.run_if(input_just_pressed(MouseButton::Left)),
         )
+        .add_systems(Update, highlight_city)
         .insert_resource(State::default())
         .insert_resource(SelectedCity::default())
         .add_systems(Update, draw_pointer)
@@ -57,6 +58,7 @@ struct Position {
 struct Materials {
     city: Handle<StandardMaterial>,
     selected_city: Handle<StandardMaterial>,
+    highlighted_city: Handle<StandardMaterial>,
     path: Handle<StandardMaterial>,
 }
 
@@ -276,6 +278,12 @@ fn startup(
         }),
         selected_city: materials.add(StandardMaterial {
             base_color: Color::WHITE,
+            perceptual_roughness: 0.0,
+            metallic: 0.0,
+            ..default()
+        }),
+        highlighted_city: materials.add(StandardMaterial {
+            base_color: state.config.highlight_color,
             perceptual_roughness: 0.0,
             metallic: 0.0,
             ..default()
@@ -517,6 +525,41 @@ fn on_mouse_left_click(
             }
         } else {
             // no city near clicked point
+        }
+    }
+}
+
+fn highlight_city(
+    state: Res<State>,
+    pointers: Query<&PointerInteraction>,
+    mut commands: Commands,
+    cities: Query<(Entity, &Position), With<City>>,
+    materials: Res<Materials>,
+    selected: Res<SelectedCity>,
+) {
+    for point in pointers
+        .iter()
+        .filter_map(|interaction| interaction.get_nearest_hit())
+        .filter_map(|(_entity, hit)| hit.position)
+    {
+        if let Some((entity, _pos)) = cities.iter().find(|(_, pos)| {
+            (pos.globe_point.pos - point).length() < state.config.min_city_distance / 2.0
+        }) {
+            if selected.0.is_none() || selected.0.unwrap() != entity {
+                commands
+                    .entity(entity)
+                    .insert(MeshMaterial3d(materials.highlighted_city.clone()));
+            }
+        } else {
+            // Remove highlight from all cities
+            for (entity, _) in cities.iter() {
+                if selected.0.is_some() && selected.0.unwrap() == entity {
+                    continue; // Skip the selected city
+                }
+                commands
+                    .entity(entity)
+                    .insert(MeshMaterial3d(materials.city.clone()));
+            }
         }
     }
 }
