@@ -24,7 +24,12 @@ pub fn init() {
             Update,
             on_mouse_right_click.run_if(input_just_pressed(MouseButton::Right)),
         )
+        .add_systems(
+            Update,
+            on_mouse_left_click.run_if(input_just_pressed(MouseButton::Left)),
+        )
         .insert_resource(State::default())
+        .insert_resource(SelectedCity::default())
         .add_systems(Update, draw_pointer)
         .add_systems(Update, try_getting_globe)
         .run();
@@ -36,8 +41,25 @@ struct Globe;
 #[derive(Component)]
 struct MainCamera;
 
+#[derive(Component)]
+struct City;
+
+#[derive(Resource, Default)]
+struct SelectedCity(Option<Entity>);
+
+#[derive(Component)]
+struct Position {
+    gridpoint: GridPoint,
+    globe_point: GlobePoint,
+}
+
 #[derive(Resource)]
 struct CityMaterialHandle {
+    handle: Handle<StandardMaterial>,
+}
+
+#[derive(Resource)]
+struct SelectedCityMaterialHandle {
     handle: Handle<StandardMaterial>,
 }
 
@@ -266,6 +288,15 @@ fn startup(
         }),
     });
 
+    commands.insert_resource(SelectedCityMaterialHandle {
+        handle: materials.add(StandardMaterial {
+            base_color: Color::WHITE,
+            perceptual_roughness: 0.0,
+            metallic: 0.0,
+            ..default()
+        }),
+    });
+
     let path_material_handle = materials.add(StandardMaterial {
         base_color: Color::srgb_u8(255, 165, 165),
         perceptual_roughness: 0.0,
@@ -418,12 +449,11 @@ fn draw_pointer(pointers: Query<&PointerInteraction>, mut gizmos: Gizmos) {
 
 fn on_mouse_right_click(
     pointers: Query<&PointerInteraction>,
-    mut state: ResMut<State>,
+    state: ResMut<State>,
     mut commands: Commands,
+    cities: Query<(Entity, &Position), With<City>>,
     city_mesh: Res<CityMeshHandle>,
     city_material: Res<CityMaterialHandle>,
-    path_mesh: Res<PathMeshHandle>,
-    path_material: Res<PathMaterialHandle>,
 ) {
     for point in pointers
         .iter()
@@ -437,37 +467,19 @@ fn on_mouse_right_click(
                 continue; // Skip water points
             }
 
-            // Check if a city already exists nearby
-            if state.cities.iter().any(|city| {
-                let city_pos = state.globe_points.points[city].pos;
-                let distance = (city_pos - globe_point.pos).length();
-                distance < state.config.min_city_distance // Adjust the threshold as needed
+            if cities.iter().any(|(_, pos)| {
+                (pos.globe_point.pos - globe_point.pos).length() < state.config.min_city_distance
             }) {
                 println!("City already exists near gridpoint: {:?}", gridpoint);
-                continue; // Skip if a city already exists nearby
-            }
-
-            state.cities.push(gridpoint);
-            if cfg!(debug_assertions) {
-                println!("Placing city at globe_point: {:?}", globe_point);
-                println!("Cities: {:?}", state.cities);
-            }
-
-            // if the number of cities is even, create a path between the two last cities
-            if state.cities.len() % 2 == 0 {
-                let last_city = *state.cities.last().unwrap();
-                let second_last_city = *state.cities.get(state.cities.len() - 2).unwrap();
-                create_path(
-                    &mut commands,
-                    &mut state,
-                    path_material.handle.clone(),
-                    path_mesh.handle.clone(),
-                    second_last_city,
-                    last_city,
-                );
+                continue; // Skip if a city already exists at this point
             }
 
             commands.spawn((
+                City,
+                Position {
+                    gridpoint,
+                    globe_point: globe_point,
+                },
                 Mesh3d(city_mesh.handle.clone()),
                 MeshMaterial3d(city_material.handle.clone()),
                 Transform::from_xyz(globe_point.pos[0], globe_point.pos[1], globe_point.pos[2])
@@ -475,6 +487,61 @@ fn on_mouse_right_click(
             ));
         } else {
             println!("No GlobePoint found for gridpoint: {:?}", gridpoint);
+        }
+    }
+}
+
+fn on_mouse_left_click(
+    pointers: Query<&PointerInteraction>,
+    mut state: ResMut<State>,
+    mut commands: Commands,
+    cities: Query<(Entity, &Position), With<City>>,
+    mut selected: ResMut<SelectedCity>,
+    city_material: Res<CityMaterialHandle>,
+    selected_city_material: Res<SelectedCityMaterialHandle>,
+    path_mesh: Res<PathMeshHandle>,
+    path_material: Res<PathMaterialHandle>,
+) {
+    for clicked_point in pointers
+        .iter()
+        .filter_map(|interaction| interaction.get_nearest_hit())
+        .filter_map(|(_entity, hit)| hit.position)
+    {
+        // Check if a city exists near the clicked point
+        if let Some((clicked_city, _pos)) = cities.iter().find(|(_, pos)| {
+            (pos.globe_point.pos - clicked_point).length() < state.config.min_city_distance / 2.0
+        }) {
+            match selected.0 {
+                None => {
+                    // Select the city
+                    selected.0 = Some(clicked_city);
+                    commands
+                        .entity(clicked_city)
+                        .insert(MeshMaterial3d(selected_city_material.handle.clone()));
+                    println!("Selected city {:?}", clicked_city);
+                }
+                Some(prev_selected) => {
+                    if prev_selected != clicked_city {
+                        // Connect the cities
+                        println!("Connecting {:?} and {:?}", prev_selected, clicked_city);
+                        create_path(
+                            &mut commands,
+                            &mut state,
+                            path_material.handle.clone(),
+                            path_mesh.handle.clone(),
+                            cities.get(prev_selected).unwrap().1.gridpoint,
+                            cities.get(clicked_city).unwrap().1.gridpoint,
+                        );
+                    }
+                    // Clear selection
+                    selected.0 = None;
+                    commands
+                        .entity(prev_selected)
+                        .insert(MeshMaterial3d(city_material.handle.clone()));
+                }
+            }
+        } else {
+            // no city near clicked point
         }
     }
 }
