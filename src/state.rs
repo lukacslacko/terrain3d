@@ -1,4 +1,4 @@
-use crate::dijkstra::{GlobePoints, GridPoint};
+use crate::dijkstra::GlobePoints;
 use crate::perlin;
 
 use bevy::prelude::*;
@@ -41,6 +41,5 @@ impl Default for Config {
 #[derive(Resource, Default)]
 pub struct State {
     pub globe_points: GlobePoints,
-    pub cities: Vec<GridPoint>,
     pub config: Config,
 }
