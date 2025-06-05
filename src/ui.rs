@@ -426,7 +426,7 @@ fn draw_pointer(pointers: Query<&PointerInteraction>, mut gizmos: Gizmos) {
 
 fn on_mouse_right_click(
     pointers: Query<&PointerInteraction>,
-    state: ResMut<State>,
+    state: Res<State>,
     mut commands: Commands,
     cities: Query<(Entity, &Position), With<City>>,
     meshes: Res<Meshes>,
