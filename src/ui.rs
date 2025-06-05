@@ -54,33 +54,21 @@ struct Position {
 }
 
 #[derive(Resource)]
-struct CityMaterialHandle {
-    handle: Handle<StandardMaterial>,
+struct Materials {
+    city: Handle<StandardMaterial>,
+    selected_city: Handle<StandardMaterial>,
+    path: Handle<StandardMaterial>,
 }
 
 #[derive(Resource)]
-struct SelectedCityMaterialHandle {
-    handle: Handle<StandardMaterial>,
-}
-
-#[derive(Resource)]
-struct PathMaterialHandle {
-    handle: Handle<StandardMaterial>,
-}
-
-#[derive(Resource)]
-struct CityMeshHandle {
-    handle: Handle<Mesh>,
+struct Meshes {
+    city: Handle<Mesh>,
+    path: Handle<Mesh>,
 }
 
 #[derive(Resource)]
 struct GlobeReceiver {
     receiver: Receiver<(GlobePoints, Mesh)>,
-}
-
-#[derive(Resource)]
-struct PathMeshHandle {
-    handle: Handle<Mesh>,
 }
 
 fn make_globe(config: &crate::state::Config) -> (GlobePoints, Mesh) {
@@ -279,43 +267,32 @@ fn startup(
 
     commands.insert_resource(GlobeReceiver { receiver: rx });
 
-    commands.insert_resource(CityMaterialHandle {
-        handle: materials.add(StandardMaterial {
+    commands.insert_resource(Materials {
+        city: materials.add(StandardMaterial {
             base_color: state.config.city_marker_color,
             perceptual_roughness: 0.0,
             metallic: 0.0,
             ..default()
         }),
-    });
-
-    commands.insert_resource(SelectedCityMaterialHandle {
-        handle: materials.add(StandardMaterial {
+        selected_city: materials.add(StandardMaterial {
             base_color: Color::WHITE,
+            perceptual_roughness: 0.0,
+            metallic: 0.0,
+            ..default()
+        }),
+        path: materials.add(StandardMaterial {
+            base_color: Color::srgb_u8(255, 165, 165),
             perceptual_roughness: 0.0,
             metallic: 0.0,
             ..default()
         }),
     });
 
-    let path_material_handle = materials.add(StandardMaterial {
-        base_color: Color::srgb_u8(255, 165, 165),
-        perceptual_roughness: 0.0,
-        metallic: 0.0,
-        ..default()
-    });
-    commands.insert_resource(PathMaterialHandle {
-        handle: path_material_handle.clone(),
-    });
-
-    let city_mesh_handle = meshes.add(Cuboid {
-        half_size: Vec3::splat(state.config.city_marker_size),
-    });
-    commands.insert_resource(CityMeshHandle {
-        handle: city_mesh_handle.clone(),
-    });
-
-    commands.insert_resource(PathMeshHandle {
-        handle: meshes.add(Capsule3d {
+    commands.insert_resource(Meshes {
+        city: meshes.add(Cuboid {
+            half_size: Vec3::splat(state.config.city_marker_size),
+        }),
+        path: meshes.add(Capsule3d {
             half_length: 0.5,
             radius: 0.05,
         }),
@@ -452,8 +429,8 @@ fn on_mouse_right_click(
     state: ResMut<State>,
     mut commands: Commands,
     cities: Query<(Entity, &Position), With<City>>,
-    city_mesh: Res<CityMeshHandle>,
-    city_material: Res<CityMaterialHandle>,
+    meshes: Res<Meshes>,
+    materials: Res<Materials>,
 ) {
     for point in pointers
         .iter()
@@ -478,10 +455,10 @@ fn on_mouse_right_click(
                 City,
                 Position {
                     gridpoint,
-                    globe_point: globe_point,
+                    globe_point,
                 },
-                Mesh3d(city_mesh.handle.clone()),
-                MeshMaterial3d(city_material.handle.clone()),
+                Mesh3d(meshes.city.clone()),
+                MeshMaterial3d(materials.city.clone()),
                 Transform::from_xyz(globe_point.pos[0], globe_point.pos[1], globe_point.pos[2])
                     .looking_at(Vec3::ZERO, Vec3::Z),
             ));
@@ -497,10 +474,8 @@ fn on_mouse_left_click(
     mut commands: Commands,
     cities: Query<(Entity, &Position), With<City>>,
     mut selected: ResMut<SelectedCity>,
-    city_material: Res<CityMaterialHandle>,
-    selected_city_material: Res<SelectedCityMaterialHandle>,
-    path_mesh: Res<PathMeshHandle>,
-    path_material: Res<PathMaterialHandle>,
+    meshes: Res<Meshes>,
+    materials: Res<Materials>,
 ) {
     for clicked_point in pointers
         .iter()
@@ -517,7 +492,7 @@ fn on_mouse_left_click(
                     selected.0 = Some(clicked_city);
                     commands
                         .entity(clicked_city)
-                        .insert(MeshMaterial3d(selected_city_material.handle.clone()));
+                        .insert(MeshMaterial3d(materials.selected_city.clone()));
                     println!("Selected city {:?}", clicked_city);
                 }
                 Some(prev_selected) => {
@@ -527,8 +502,8 @@ fn on_mouse_left_click(
                         create_path(
                             &mut commands,
                             &mut state,
-                            path_material.handle.clone(),
-                            path_mesh.handle.clone(),
+                            materials.path.clone(),
+                            meshes.path.clone(),
                             cities.get(prev_selected).unwrap().1.gridpoint,
                             cities.get(clicked_city).unwrap().1.gridpoint,
                         );
@@ -537,7 +512,7 @@ fn on_mouse_left_click(
                     selected.0 = None;
                     commands
                         .entity(prev_selected)
-                        .insert(MeshMaterial3d(city_material.handle.clone()));
+                        .insert(MeshMaterial3d(materials.city.clone()));
                 }
             }
         } else {
