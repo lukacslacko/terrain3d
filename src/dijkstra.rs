@@ -54,7 +54,7 @@ impl GlobePoints {
         let size = grid_size as i32;
         let mut edges = 0;
         for (pts_done, (&grid, &p)) in self.points.iter().enumerate() {
-            if pts_done % 1000 == 0 {
+            if pts_done % 10000 == 0 {
                 println!(
                     "Building graph: {}/{}, edges {}",
                     pts_done,

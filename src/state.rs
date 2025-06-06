@@ -6,6 +6,8 @@ use bevy::prelude::*;
 #[derive(Debug, Clone)]
 pub struct Config {
     pub grid_size: u32,
+    pub sea_level: f32, // sea level for the globe
+    pub snow_level: f32, // snow level above sea level
     pub perlin_config: perlin::PerlinConfig,
     pub water_penalty: f32,
     pub snow_penalty: f32,
@@ -18,6 +20,8 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             grid_size: 128,
+            sea_level: 5.0,
+            snow_level: 0.5,
             perlin_config: perlin::PerlinConfig {
                 seed: 5,
                 frequency: 2.0,

@@ -74,8 +74,9 @@ pub fn make_globe(config: &crate::state::Config) -> (GlobePoints, Mesh) {
 
     let mut globe_points = GlobePoints::default();
     let grid_size = config.grid_size;
-
     let m = grid_size + 1;
+    let sea_level = config.sea_level;
+    let snow = config.snow_level;
 
     let perlin = Perlin {
         config: config.perlin_config,
@@ -83,56 +84,57 @@ pub fn make_globe(config: &crate::state::Config) -> (GlobePoints, Mesh) {
 
     println!("Making globe");
 
+    let sphere = |u: f32, v: f32, face: u32| {
+        let x = u - 0.5;
+        let y = v - 0.5;
+        let z = 0.5;
+        let r = (x * x + y * y + z * z).sqrt();
+        match face {
+            0 => (x / r, y / r, z / r),
+            1 => (-x / r, y / r, -z / r),
+            2 => (z / r, y / r, -x / r),
+            3 => (-z / r, y / r, x / r),
+            4 => (x / r, z / r, -y / r),
+            5 => (x / r, -z / r, y / r),
+            _ => unreachable!(),
+        }
+    };
+
+    let surface = |u, v, face: u32| {
+        let (nx, ny, nz) = sphere(u, v, face);
+        let nr = 5.0;
+        // let color = [u, v, (1 + face) as f32 / 8.0, 1.0];
+        let noise = perlin.noise(nx, ny, nz) * 1.0;
+        (
+            nr + noise,
+            [nx * (nr + noise), ny * (nr + noise), nz * (nr + noise)],
+        )
+    };
+
+    let normvec = |u, v, face| {
+        let (_, p) = surface(u, v, face);
+        let (_, q) = surface(u + 0.001, v, face);
+        let (_, r) = surface(u, v + 0.001, face);
+        let a = [p[0] - q[0], p[1] - q[1], p[2] - q[2]];
+        let b = [p[0] - r[0], p[1] - r[1], p[2] - r[2]];
+        let n = [
+            a[1] * b[2] - a[2] * b[1],
+            a[2] * b[0] - a[0] * b[2],
+            a[0] * b[1] - a[1] * b[0],
+        ];
+        let r = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
+        [n[0] / r, n[1] / r, n[2] / r]
+    };
+
     for face in 0..6 {
         println!("Making face {}", face);
         for i in 0..m {
             for j in 0..m {
                 let u = i as f32 / grid_size as f32;
                 let v = j as f32 / grid_size as f32;
-                let sphere = |u: f32, v: f32| {
-                    let x = u - 0.5;
-                    let y = v - 0.5;
-                    let z = 0.5;
-                    let r = (x * x + y * y + z * z).sqrt();
-                    match face {
-                        0 => (x / r, y / r, z / r),
-                        1 => (-x / r, y / r, -z / r),
-                        2 => (z / r, y / r, -x / r),
-                        3 => (-z / r, y / r, x / r),
-                        4 => (x / r, z / r, -y / r),
-                        5 => (x / r, -z / r, y / r),
-                        _ => unreachable!(),
-                    }
-                };
-                let surface = |u, v| {
-                    let (nx, ny, nz) = sphere(u, v);
-                    let nr = 5.0;
-                    // let color = [u, v, (1 + face) as f32 / 8.0, 1.0];
-                    let noise = perlin.noise(nx, ny, nz) * 1.0;
-                    (
-                        nr + noise,
-                        [nx * (nr + noise), ny * (nr + noise), nz * (nr + noise)],
-                    )
-                };
-                let normvec = |u, v| {
-                    let (_, p) = surface(u, v);
-                    let (_, q) = surface(u + 0.001, v);
-                    let (_, r) = surface(u, v + 0.001);
-                    let a = [p[0] - q[0], p[1] - q[1], p[2] - q[2]];
-                    let b = [p[0] - r[0], p[1] - r[1], p[2] - r[2]];
-                    let n = [
-                        a[1] * b[2] - a[2] * b[1],
-                        a[2] * b[0] - a[0] * b[2],
-                        a[0] * b[1] - a[1] * b[0],
-                    ];
-                    let r = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
-                    [n[0] / r, n[1] / r, n[2] / r]
-                };
-                let (noise, pos) = surface(u, v);
+                
+                let (noise, pos) = surface(u, v, face);
 
-                let sea_level = 5.0;
-
-                let snow = 0.5;
                 let height = noise - sea_level;
                 let color = if cfg!(debug_assertions) {
                     // for debugging, use different colors for each face
@@ -153,7 +155,7 @@ pub fn make_globe(config: &crate::state::Config) -> (GlobePoints, Mesh) {
                 if height > 0.0 {
                     positions.push(pos);
                     colors.push(color);
-                    normals.push(normvec(u, v));
+                    normals.push(normvec(u, v, face));
                 } else {
                     let normpos = [pos[0] / noise, pos[1] / noise, pos[2] / noise];
                     positions.push([
@@ -206,7 +208,6 @@ pub fn make_globe(config: &crate::state::Config) -> (GlobePoints, Mesh) {
     globe_points.build_graph(grid_size, config.climbing_cost);
 
     println!("Making mesh.");
-
     let mut mesh = Mesh::new(
         bevy::render::mesh::PrimitiveTopology::TriangleList,
         RenderAssetUsages::RENDER_WORLD | RenderAssetUsages::MAIN_WORLD,
