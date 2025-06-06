@@ -7,7 +7,6 @@ pub struct Materials {
     pub city: Handle<StandardMaterial>,
     pub selected_city: Handle<StandardMaterial>,
     pub highlighted_city: Handle<StandardMaterial>,
-    pub path: Handle<StandardMaterial>,
 }
 
 impl Materials {
@@ -30,18 +29,11 @@ impl Materials {
             metallic: 0.0,
             ..default()
         });
-        let path = material_assets.add(StandardMaterial {
-            base_color: Color::srgb_u8(255, 165, 165),
-            perceptual_roughness: 0.0,
-            metallic: 0.0,
-            ..default()
-        });
 
         Self {
             city,
             selected_city,
             highlighted_city,
-            path,
         }
     }
 }

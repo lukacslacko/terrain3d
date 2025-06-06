@@ -1,4 +1,4 @@
-use crate::dijkstra::{GlobePoint, GlobePoints, GridPoint, dijkstra};
+use crate::dijkstra::{GlobePoint, GlobePoints, GridPoint, dijkstra, get_closest_gridpoint};
 use crate::meshes_materials::{Materials, Meshes, make_globe};
 use crate::state::{Rail, RailInfo, State};
 
@@ -198,7 +198,7 @@ fn create_path(
                         .insert((MeshMaterial3d(material.clone()),));
                     continue;
                 }
-                // Otherwise, create a new entity for the rail and store it in the 
+                // Otherwise, create a new entity for the rail and store it in the
                 // Rails resource.
                 //
                 // We first create an empty entity in order to already have its ID
