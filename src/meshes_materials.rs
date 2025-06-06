@@ -11,7 +11,7 @@ pub struct Materials {
 }
 
 impl Materials {
-    pub fn create(material_assets: &mut Assets<StandardMaterial>) -> Self {
+    pub fn new(material_assets: &mut Assets<StandardMaterial>) -> Self {
         let city = material_assets.add(StandardMaterial {
             base_color: Color::srgb_u8(124, 144, 255),
             perceptual_roughness: 0.0,
@@ -53,7 +53,7 @@ pub struct Meshes {
 }
 
 impl Meshes {
-    pub fn create(mesh_assets: &mut Assets<Mesh>) -> Self {
+    pub fn new(mesh_assets: &mut Assets<Mesh>) -> Self {
         let city = mesh_assets.add(Cuboid {
             half_size: Vec3::splat(0.1),
         });

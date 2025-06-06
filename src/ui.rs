@@ -112,8 +112,8 @@ fn startup(
     });
 
     commands.insert_resource(GlobeReceiver { receiver: rx });
-    commands.insert_resource(Materials::create(&mut materials));
-    commands.insert_resource(Meshes::create(&mut meshes));
+    commands.insert_resource(Materials::new(&mut materials));
+    commands.insert_resource(Meshes::new(&mut meshes));
 
     commands.spawn((
         PointLight {
