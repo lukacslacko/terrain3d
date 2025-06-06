@@ -18,8 +18,13 @@ pub fn init() {
         .add_systems(Startup, startup)
         .add_systems(
             FixedUpdate,
-            rotate_on_drag.run_if(input_pressed(MouseButton::Left)),
+            rotate_on_drag.run_if(input_pressed(MouseButton::Right)),
         )
+        .add_systems(
+            FixedUpdate,
+            look_around_on_drag.run_if(ctrl_left_or_middle_pressed),
+        )
+        .add_systems(Update, zoom_with_scroll)
         .add_systems(
             Update,
             on_mouse_right_click.run_if(input_just_pressed(MouseButton::Right)),
@@ -34,6 +39,15 @@ pub fn init() {
         .add_systems(Update, draw_pointer)
         .add_systems(Update, try_getting_globe)
         .run();
+}
+
+fn ctrl_left_or_middle_pressed(
+    buttons: Res<Input<MouseButton>>,
+    keys: Res<Input<KeyCode>>,
+) -> bool {
+    buttons.pressed(MouseButton::Middle)
+        || (buttons.pressed(MouseButton::Left)
+            && (keys.pressed(KeyCode::ControlLeft) || keys.pressed(KeyCode::ControlRight)))
 }
 
 #[derive(Component)]
@@ -415,6 +429,42 @@ fn rotate_on_drag(
     // Step 3: Update position and look at the origin
     transform.translation = origin + new_direction.normalize() * radius;
     transform.look_at(origin, up);
+
+    for mut light_transform in lights_transform.iter_mut() {
+        let above_camera = transform.translation + transform.up() * 5.0;
+        light_transform.0.translation = above_camera;
+    }
+}
+
+fn look_around_on_drag(
+    mut motion_event_reader: EventReader<MouseMotion>,
+    mut camera_transform: Query<&mut Transform, With<MainCamera>>,
+) {
+    let (dx, dy) = motion_event_reader
+        .read()
+        .fold((0.0, 0.0), |(x, y), event| {
+            (x - event.delta.x * 0.005, y - event.delta.y * 0.005)
+        });
+
+    if dx != 0.0 || dy != 0.0 {
+        let mut transform = camera_transform.single_mut().unwrap();
+        transform.rotate_local_y(dx);
+        transform.rotate_local_x(dy);
+    }
+}
+
+fn zoom_with_scroll(
+    mut scroll_evr: EventReader<MouseWheel>,
+    mut camera_transform: Query<(&mut Transform, &MainCamera)>,
+    mut lights_transform: Query<(&mut Transform, &PointLight), Without<MainCamera>>,
+) {
+    let scroll: f32 = scroll_evr.read().map(|e| e.y).sum();
+    if scroll == 0.0 {
+        return;
+    }
+
+    let (mut transform, _cam) = camera_transform.single_mut().unwrap();
+    transform.translation += transform.forward().normalize() * scroll * 0.5;
 
     for mut light_transform in lights_transform.iter_mut() {
         let above_camera = transform.translation + transform.up() * 5.0;
