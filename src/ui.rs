@@ -20,6 +20,8 @@ pub fn init() {
             FixedUpdate,
             rotate_on_drag.run_if(input_pressed(MouseButton::Left)),
         )
+        .add_systems(FixedUpdate, look_around_on_drag.run_if(ctrl_pressed))
+        .add_systems(Update, zoom_with_scroll)
         .add_systems(
             Update,
             on_mouse_right_click.run_if(input_just_pressed(MouseButton::Right)),
@@ -34,6 +36,15 @@ pub fn init() {
         .add_systems(Update, draw_pointer)
         .add_systems(Update, try_getting_globe)
         .run();
+}
+
+fn ctrl_pressed(
+    keys: Res<ButtonInput<KeyCode>>,
+    mouse_buttons: Res<ButtonInput<MouseButton>>,
+) -> bool {
+    keys.pressed(KeyCode::ControlLeft)
+        || keys.pressed(KeyCode::ControlRight)
+        || mouse_buttons.pressed(MouseButton::Middle)
 }
 
 #[derive(Component)]
@@ -309,18 +320,18 @@ fn startup(
     commands.spawn((
         PointLight {
             shadows_enabled: true,
-            intensity: 10_000_000.0,
+            intensity: 25_000_000.0,
             range: 100.0,
             // shadow_depth_bias: 0.2,
             ..default()
         },
-        Transform::from_xyz(0.0, 5.0, 20.0),
+        Transform::from_xyz(-15.0, 0.0, 25.0),
     ));
 
     commands.spawn((
         Camera3d::default(),
         MainCamera,
-        Transform::from_xyz(0.0, 11.0, 12.0).looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Z),
+        Transform::from_xyz(0.0, 0.0, 15.0).looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Z),
     ));
 }
 
@@ -385,6 +396,12 @@ fn create_path(
     }
 }
 
+fn adjust_light(light_transform: &mut Transform, camera_transform: &Transform) {
+    let above_camera = camera_transform.translation + camera_transform.up() * 15.0
+        - camera_transform.forward() * 10.0;
+    light_transform.translation = above_camera;
+}
+
 fn rotate_on_drag(
     mut motion_event_reader: EventReader<MouseMotion>,
     mut camera_transform: Query<(&mut Transform, &MainCamera)>,
@@ -397,10 +414,6 @@ fn rotate_on_drag(
         });
     let (mut transform, _camera) = camera_transform.single_mut().unwrap();
 
-    let origin = Vec3::ZERO;
-    let direction = transform.translation - origin;
-    let radius = 15.0;
-
     // Step 1: Get camera's local axes
     let right = transform.right().as_vec3(); // local right
     let up = transform.up().as_vec3(); // local up
@@ -410,15 +423,51 @@ fn rotate_on_drag(
     let rot_vertical = Quat::from_axis_angle(right, dy);
     let rotation = rot_horizontal * rot_vertical;
 
-    let new_direction = rotation * direction;
-
-    // Step 3: Update position and look at the origin
-    transform.translation = origin + new_direction.normalize() * radius;
-    transform.look_at(origin, up);
+    transform.translation = rotation * transform.translation;
+    transform.rotation = rotation * transform.rotation;
 
     for mut light_transform in lights_transform.iter_mut() {
-        let above_camera = transform.translation + transform.up() * 5.0;
-        light_transform.0.translation = above_camera;
+        adjust_light(light_transform.0.as_mut(), transform.as_mut());
+    }
+}
+
+fn look_around_on_drag(
+    mut motion_event_reader: EventReader<MouseMotion>,
+    mut camera_transform: Query<&mut Transform, With<MainCamera>>,
+    mut lights_transform: Query<(&mut Transform, &PointLight), Without<MainCamera>>,
+) {
+    let (dx, dy) = motion_event_reader
+        .read()
+        .fold((0.0, 0.0), |(x, y), event| {
+            (x - event.delta.x * 0.002, y - event.delta.y * 0.002)
+        });
+
+    if dx != 0.0 || dy != 0.0 {
+        let mut transform = camera_transform.single_mut().unwrap();
+        transform.rotate_local_y(-dx);
+        transform.rotate_local_x(-dy);
+        for mut light_transform in lights_transform.iter_mut() {
+            adjust_light(light_transform.0.as_mut(), transform.as_mut());
+        }
+    }
+}
+
+fn zoom_with_scroll(
+    mut scroll_evr: EventReader<MouseWheel>,
+    mut camera_transform: Query<(&mut Transform, &MainCamera)>,
+    mut lights_transform: Query<(&mut Transform, &PointLight), Without<MainCamera>>,
+) {
+    let scroll: f32 = scroll_evr.read().map(|e| e.y).sum();
+    if scroll == 0.0 {
+        return;
+    }
+
+    let (mut transform, _cam) = camera_transform.single_mut().unwrap();
+    let motion = transform.forward().normalize() * scroll * 0.5;
+    transform.translation += motion;
+
+    for mut light_transform in lights_transform.iter_mut() {
+        adjust_light(light_transform.0.as_mut(), transform.as_mut());
     }
 }
 
