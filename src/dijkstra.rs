@@ -1,4 +1,4 @@
-use bevy::math::Vec3;
+use bevy::math::{Vec2, Vec3};
 use ordered_float::OrderedFloat;
 use priority_queue::PriorityQueue;
 use std::collections::{HashMap, HashSet};
@@ -181,4 +181,63 @@ pub fn dijkstra(start: GridPoint, end: GridPoint, globe_points: &GlobePoints) ->
         current = prev;
     }
     path
+}
+
+pub fn get_closest_gridpoint(pos: Vec3, grid_size: u32) -> GridPoint {
+    let idx = argmax(pos.abs());
+    let sign_at_max = if pos[idx] < 0.0 { -1 } else { 1 };
+
+    let face = match (idx, sign_at_max) {
+        (0, 1) => 2,
+        (0, -1) => 3,
+        (1, 1) => 4,
+        (1, -1) => 5,
+        (2, 1) => 0,
+        (2, -1) => 1,
+        _ => unreachable!(),
+    };
+
+    if cfg!(debug_assertions) {
+        let color = match face {
+            0 => "red",
+            1 => "green",
+            2 => "blue",
+            3 => "yellow",
+            4 => "pink",
+            5 => "gray",
+            _ => unreachable!(),
+        };
+        println!("face color: {:?}", color);
+    }
+
+    let norm_pos = pos * 0.5 / pos[idx];
+
+    let xy = match face {
+        0 => Vec2::new(norm_pos.x, norm_pos.y),
+        1 => Vec2::new(norm_pos.x, -norm_pos.y),
+        2 => Vec2::new(-norm_pos.z, norm_pos.y),
+        3 => Vec2::new(-norm_pos.z, -norm_pos.y),
+        4 => Vec2::new(norm_pos.x, -norm_pos.z),
+        5 => Vec2::new(-norm_pos.x, -norm_pos.z),
+        _ => unreachable!(),
+    };
+    let grid_x = ((xy.x + 0.5) * grid_size as f32).round() as u32;
+    let grid_y = ((xy.y + 0.5) * grid_size as f32).round() as u32;
+
+    let gridpoint = (face, grid_x, grid_y);
+    if cfg!(debug_assertions) {
+        println!("gridpoint: {:?}", gridpoint);
+    }
+    gridpoint
+}
+
+fn argmax(v: Vec3) -> usize {
+    let [x, y, z] = v.to_array();
+    if x >= y && x >= z {
+        0
+    } else if y >= z {
+        1
+    } else {
+        2
+    }
 }
