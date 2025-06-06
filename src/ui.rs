@@ -1,6 +1,7 @@
 use crate::dijkstra::{GlobePoint, GlobePoints, GridPoint, dijkstra, get_closest_gridpoint};
 use crate::meshes_materials::{Materials, Meshes, make_globe};
-use crate::state::State;
+use crate::state::{Rail, RailInfo, State};
+
 use bevy::{
     color::palettes::tailwind::*,
     input::{common_conditions::*, mouse::*},
@@ -112,9 +113,8 @@ fn startup(
     });
 
     commands.insert_resource(GlobeReceiver { receiver: rx });
-    commands.insert_resource(Materials::new(&mut materials));
     commands.insert_resource(Meshes::new(&mut meshes));
-
+    commands.insert_resource(Materials::new(&mut materials));
     commands.spawn((
         PointLight {
             shadows_enabled: true,
@@ -136,13 +136,25 @@ fn startup(
 fn create_path(
     commands: &mut Commands<'_, '_>,
     state: &mut State,
-    material: Handle<StandardMaterial>,
+    materials: &mut Assets<StandardMaterial>,
     cylinder: Handle<Mesh>,
     start: GridPoint,
     end: GridPoint,
 ) {
     println!("Dijkstra");
     let path = dijkstra(start, end, &state.globe_points);
+
+    // Create a custom color for the path based on start and end points.
+    let r = ((27 * (start.1 + end.1)) % 256) as u8;
+    let g = ((51 * (start.2 + end.2)) % 256) as u8;
+    let b = ((11 * (start.1 + end.2)) % 256) as u8;
+
+    let material = materials.add(StandardMaterial {
+        base_color: Color::srgb_u8(r, g, b),
+        perceptual_roughness: 0.0,
+        metallic: 0.0,
+        ..default()
+    });
 
     let reduction_factor = state.config.reduction_factor;
     // Apply cost reduction to edges in the path (only once per edge)
@@ -172,12 +184,42 @@ fn create_path(
         let (from, to) = (line[0], line[1]);
         if let Some(from_point) = state.globe_points.points.get(&from) {
             if let Some(to_point) = state.globe_points.points.get(&to) {
+                let rail = Rail {
+                    from: from.min(to),
+                    to: from.max(to),
+                };
+                // If this piece of rail already exists, just change its material
+                // corresponding to the current path.
+                // We don't _really_ need this, but this demonstrates how to update
+                // existig rail piece entities.
+                if let Some(rail_info) = state.rails.rails.get(&rail) {
+                    commands
+                        .entity(rail_info.entity)
+                        .insert((MeshMaterial3d(material.clone()),));
+                    continue;
+                }
+                // Otherwise, create a new entity for the rail and store it in the
+                // Rails resource.
+                //
+                // We first create an empty entity in order to already have its ID
+                // which we can key the RailInfo with.
+                //
+                // We'll update it with all the details the same way as we've updated
+                // the existing rail piece above.
+                let entity = commands.spawn_empty().id();
+                state.rails.rails.insert(
+                    rail,
+                    RailInfo {
+                        entity,
+                        // Other details can be added here.
+                    },
+                );
                 // Create cylinder mesh connecting from_point to to_point.
                 let direction = to_point.pos - from_point.pos;
                 let length = direction.length();
                 let mid_point = (from_point.pos + to_point.pos) / 2.0;
                 let rotation = Quat::from_rotation_arc(Vec3::Y, direction.normalize());
-                commands.spawn((
+                commands.entity(entity).insert((
                     Mesh3d(cylinder.clone()),
                     MeshMaterial3d(material.clone()),
                     Transform::from_scale(Vec3 {
@@ -323,9 +365,11 @@ fn on_mouse_right_click(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn on_mouse_left_click(
     pointers: Query<&PointerInteraction>,
     mut state: ResMut<State>,
+    mut all_materials: ResMut<Assets<StandardMaterial>>,
     mut commands: Commands,
     cities: Query<(Entity, &Position), With<City>>,
     mut selected: ResMut<SelectedCity>,
@@ -357,7 +401,7 @@ fn on_mouse_left_click(
                         create_path(
                             &mut commands,
                             &mut state,
-                            materials.path.clone(),
+                            &mut all_materials,
                             meshes.path.clone(),
                             cities.get(prev_selected).unwrap().1.gridpoint,
                             cities.get(clicked_city).unwrap().1.gridpoint,
