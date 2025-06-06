@@ -1,8 +1,6 @@
 use crate::dijkstra::{GlobePoint, GlobePoints, GridPoint, dijkstra};
 use crate::perlin::Perlin;
 use crate::state::State;
-use bevy::ecs::entity::hash_set::Iter;
-use bevy::render::camera;
 use bevy::{
     asset::RenderAssetUsages,
     color::palettes::tailwind::*,
