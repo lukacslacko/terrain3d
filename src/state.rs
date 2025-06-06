@@ -1,4 +1,6 @@
-use crate::dijkstra::GlobePoints;
+use std::collections::HashMap;
+
+use crate::dijkstra::{GlobePoints, GridPoint};
 use crate::perlin;
 
 use bevy::prelude::*;
@@ -38,8 +40,25 @@ impl Default for Config {
     }
 }
 
+#[derive(PartialEq, Eq, Hash)]
+pub struct Rail {
+    pub from: GridPoint,
+    pub to: GridPoint,
+}
+
+pub struct RailInfo {
+    pub entity: Entity,
+    // Other details such as how frequently the rail is used can come here.
+}
+
+#[derive(Default)]
+pub struct Rails {
+    pub rails: HashMap<Rail, RailInfo>,
+}
+
 #[derive(Resource, Default)]
 pub struct State {
     pub globe_points: GlobePoints,
     pub config: Config,
+    pub rails: Rails,
 }
