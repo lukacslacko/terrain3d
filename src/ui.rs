@@ -18,12 +18,9 @@ pub fn init() {
         .add_systems(Startup, startup)
         .add_systems(
             FixedUpdate,
-            rotate_on_drag.run_if(input_pressed(MouseButton::Right)),
+            rotate_on_drag.run_if(input_pressed(MouseButton::Left)),
         )
-        .add_systems(
-            FixedUpdate,
-            look_around_on_drag.run_if(ctrl_left_or_middle_pressed),
-        )
+        .add_systems(FixedUpdate, look_around_on_drag.run_if(ctrl_pressed))
         .add_systems(Update, zoom_with_scroll)
         .add_systems(
             Update,
@@ -41,13 +38,13 @@ pub fn init() {
         .run();
 }
 
-fn ctrl_left_or_middle_pressed(
-    buttons: Res<Input<MouseButton>>,
-    keys: Res<Input<KeyCode>>,
+fn ctrl_pressed(
+    keys: Res<ButtonInput<KeyCode>>,
+    mouse_buttons: Res<ButtonInput<MouseButton>>,
 ) -> bool {
-    buttons.pressed(MouseButton::Middle)
-        || (buttons.pressed(MouseButton::Left)
-            && (keys.pressed(KeyCode::ControlLeft) || keys.pressed(KeyCode::ControlRight)))
+    keys.pressed(KeyCode::ControlLeft)
+        || keys.pressed(KeyCode::ControlRight)
+        || mouse_buttons.pressed(MouseButton::Middle)
 }
 
 #[derive(Component)]
@@ -424,11 +421,14 @@ fn rotate_on_drag(
     let rot_vertical = Quat::from_axis_angle(right, dy);
     let rotation = rot_horizontal * rot_vertical;
 
-    let new_direction = rotation * direction;
+    transform.translation = rotation * transform.translation;
+    transform.rotation = rotation * transform.rotation;
 
-    // Step 3: Update position and look at the origin
-    transform.translation = origin + new_direction.normalize() * radius;
-    transform.look_at(origin, up);
+    // let new_direction = rotation * direction;
+
+    // // Step 3: Update position and look at the origin
+    // transform.translation = origin + new_direction.normalize() * radius;
+    // transform.look_at(origin, up);
 
     for mut light_transform in lights_transform.iter_mut() {
         let above_camera = transform.translation + transform.up() * 5.0;
@@ -464,7 +464,8 @@ fn zoom_with_scroll(
     }
 
     let (mut transform, _cam) = camera_transform.single_mut().unwrap();
-    transform.translation += transform.forward().normalize() * scroll * 0.5;
+    let motion = transform.forward().normalize() * scroll * 0.5;
+    transform.translation += motion;
 
     for mut light_transform in lights_transform.iter_mut() {
         let above_camera = transform.translation + transform.up() * 5.0;
