@@ -1,6 +1,8 @@
 use crate::dijkstra::{GlobePoint, GlobePoints, GridPoint, dijkstra};
 use crate::perlin::Perlin;
 use crate::state::State;
+use bevy::ecs::entity::hash_set::Iter;
+use bevy::render::camera;
 use bevy::{
     asset::RenderAssetUsages,
     color::palettes::tailwind::*,
@@ -396,6 +398,12 @@ fn create_path(
     }
 }
 
+fn adjust_light(light_transform: &mut Transform, camera_transform: &Transform) {
+    let above_camera = camera_transform.translation + camera_transform.up() * 15.0
+        - camera_transform.forward() * 10.0;
+    light_transform.translation = above_camera;
+}
+
 fn rotate_on_drag(
     mut motion_event_reader: EventReader<MouseMotion>,
     mut camera_transform: Query<(&mut Transform, &MainCamera)>,
@@ -420,16 +428,8 @@ fn rotate_on_drag(
     transform.translation = rotation * transform.translation;
     transform.rotation = rotation * transform.rotation;
 
-    // let new_direction = rotation * direction;
-
-    // // Step 3: Update position and look at the origin
-    // transform.translation = origin + new_direction.normalize() * radius;
-    // transform.look_at(origin, up);
-
     for mut light_transform in lights_transform.iter_mut() {
-        let above_camera =
-            transform.translation + transform.up() * 15.0 - transform.forward() * 10.0;
-        light_transform.0.translation = above_camera;
+        adjust_light(light_transform.0.as_mut(), transform.as_mut());
     }
 }
 
@@ -449,9 +449,7 @@ fn look_around_on_drag(
         transform.rotate_local_y(-dx);
         transform.rotate_local_x(-dy);
         for mut light_transform in lights_transform.iter_mut() {
-            let above_camera =
-                transform.translation + transform.up() * 15.0 - transform.forward() * 10.0;
-            light_transform.0.translation = above_camera;
+            adjust_light(light_transform.0.as_mut(), transform.as_mut());
         }
     }
 }
@@ -471,9 +469,7 @@ fn zoom_with_scroll(
     transform.translation += motion;
 
     for mut light_transform in lights_transform.iter_mut() {
-        let above_camera =
-            transform.translation + transform.up() * 15.0 - transform.forward() * 10.0;
-        light_transform.0.translation = above_camera;
+        adjust_light(light_transform.0.as_mut(), transform.as_mut());
     }
 }
 
