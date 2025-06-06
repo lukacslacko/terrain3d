@@ -320,18 +320,18 @@ fn startup(
     commands.spawn((
         PointLight {
             shadows_enabled: true,
-            intensity: 10_000_000.0,
+            intensity: 25_000_000.0,
             range: 100.0,
             // shadow_depth_bias: 0.2,
             ..default()
         },
-        Transform::from_xyz(0.0, 5.0, 20.0),
+        Transform::from_xyz(-15.0, 0.0, 25.0),
     ));
 
     commands.spawn((
         Camera3d::default(),
         MainCamera,
-        Transform::from_xyz(0.0, 11.0, 12.0).looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Z),
+        Transform::from_xyz(0.0, 0.0, 15.0).looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Z),
     ));
 }
 
@@ -408,10 +408,6 @@ fn rotate_on_drag(
         });
     let (mut transform, _camera) = camera_transform.single_mut().unwrap();
 
-    let origin = Vec3::ZERO;
-    let direction = transform.translation - origin;
-    let radius = 15.0;
-
     // Step 1: Get camera's local axes
     let right = transform.right().as_vec3(); // local right
     let up = transform.up().as_vec3(); // local up
@@ -431,7 +427,8 @@ fn rotate_on_drag(
     // transform.look_at(origin, up);
 
     for mut light_transform in lights_transform.iter_mut() {
-        let above_camera = transform.translation + transform.up() * 5.0;
+        let above_camera =
+            transform.translation + transform.up() * 15.0 - transform.forward() * 10.0;
         light_transform.0.translation = above_camera;
     }
 }
@@ -439,17 +436,23 @@ fn rotate_on_drag(
 fn look_around_on_drag(
     mut motion_event_reader: EventReader<MouseMotion>,
     mut camera_transform: Query<&mut Transform, With<MainCamera>>,
+    mut lights_transform: Query<(&mut Transform, &PointLight), Without<MainCamera>>,
 ) {
     let (dx, dy) = motion_event_reader
         .read()
         .fold((0.0, 0.0), |(x, y), event| {
-            (x - event.delta.x * 0.005, y - event.delta.y * 0.005)
+            (x - event.delta.x * 0.002, y - event.delta.y * 0.002)
         });
 
     if dx != 0.0 || dy != 0.0 {
         let mut transform = camera_transform.single_mut().unwrap();
-        transform.rotate_local_y(dx);
-        transform.rotate_local_x(dy);
+        transform.rotate_local_y(-dx);
+        transform.rotate_local_x(-dy);
+        for mut light_transform in lights_transform.iter_mut() {
+            let above_camera =
+                transform.translation + transform.up() * 15.0 - transform.forward() * 10.0;
+            light_transform.0.translation = above_camera;
+        }
     }
 }
 
@@ -468,7 +471,8 @@ fn zoom_with_scroll(
     transform.translation += motion;
 
     for mut light_transform in lights_transform.iter_mut() {
-        let above_camera = transform.translation + transform.up() * 5.0;
+        let above_camera =
+            transform.translation + transform.up() * 15.0 - transform.forward() * 10.0;
         light_transform.0.translation = above_camera;
     }
 }
