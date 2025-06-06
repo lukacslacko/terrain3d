@@ -6,13 +6,12 @@ use bevy::prelude::*;
 #[derive(Debug, Clone)]
 pub struct Config {
     pub grid_size: u32,
+    pub sea_level: f32, // sea level for the globe
+    pub snow_level: f32, // snow level above sea level
     pub perlin_config: perlin::PerlinConfig,
     pub water_penalty: f32,
     pub snow_penalty: f32,
     pub min_city_distance: f32,
-    pub city_marker_size: f32,
-    pub city_marker_color: Color,
-    pub highlight_color: Color,
     pub reduction_factor: f32, // cost reduction factor for reused edges
     pub climbing_cost: f32,
 }
@@ -21,6 +20,8 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             grid_size: 128,
+            sea_level: 5.0,
+            snow_level: 0.5,
             perlin_config: perlin::PerlinConfig {
                 seed: 5,
                 frequency: 2.0,
@@ -31,9 +32,6 @@ impl Default for Config {
             water_penalty: 5.0,
             snow_penalty: 3.0,
             min_city_distance: 0.5,
-            city_marker_size: 0.1,
-            city_marker_color: Color::srgb_u8(124, 144, 255),
-            highlight_color: Color::srgb_u8(190, 200, 255),
             reduction_factor: 2.0, // default reduction factor
             climbing_cost: 5.0,
         }
