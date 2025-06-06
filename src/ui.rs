@@ -145,12 +145,12 @@ fn create_path(
     let path = dijkstra(start, end, &state.globe_points);
 
     // Create a custom color for the path based on start and end points.
-    let i = ((27 * (start.1 + end.1)) % 256) as u8;
-    let j = ((51 * (start.2 + end.2)) % 256) as u8;
-    let k = ((11 * (start.1 + end.2)) % 256) as u8;
+    let r = ((27 * (start.1 + end.1)) % 256) as u8;
+    let g = ((51 * (start.2 + end.2)) % 256) as u8;
+    let b = ((11 * (start.1 + end.2)) % 256) as u8;
 
     let material = materials.add(StandardMaterial {
-        base_color: Color::srgb_u8(i, j, k),
+        base_color: Color::srgb_u8(r, g, b),
         perceptual_roughness: 0.0,
         metallic: 0.0,
         ..default()
