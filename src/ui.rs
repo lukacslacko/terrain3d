@@ -282,19 +282,18 @@ fn create_path(
     }
 
     // spawn a train at the first point of the path
-    if let Some(first_transform) = train_transforms.first() {
-        commands.spawn((
-            Train{
-                transforms: train_transforms.clone(),
-                idx: 0,
-                forward: true,
-            },
-            Mesh3d(train_mesh),
-            MeshMaterial3d(train_material),
-            *first_transform,
-            PointerInteraction::default(),
-        ));
-    }
+    let first_transform = *train_transforms.first().unwrap();
+    commands.spawn((
+        Train {
+            transforms: std::mem::take(&mut train_transforms),
+            idx: 0,
+            forward: true,
+        },
+        Mesh3d(train_mesh),
+        MeshMaterial3d(train_material),
+        first_transform,
+        PointerInteraction::default(),
+    ));
 }
 
 fn adjust_light(light_transform: &mut Transform, camera_transform: &Transform) {
