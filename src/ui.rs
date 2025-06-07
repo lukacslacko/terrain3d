@@ -15,14 +15,16 @@ use std::thread;
 
 pub fn init() {
     App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                resolution: WindowResolution::new(600., 600.),
+        .add_plugins((
+            DefaultPlugins.set(WindowPlugin {
+                primary_window: Some(Window {
+                    resolution: WindowResolution::new(600., 600.),
+                    ..default()
+                }),
                 ..default()
             }),
-            ..default()
-        }))
-        .add_plugins(MeshPickingPlugin)
+            MeshPickingPlugin,
+        ))
         .add_systems(Startup, startup)
         .add_systems(
             FixedUpdate,
