@@ -8,13 +8,21 @@ use bevy::{
     picking::pointer::PointerInteraction,
     prelude::*,
     render::mesh::{Mesh, Mesh3d},
+    window::WindowResolution,
 };
 use crossbeam_channel::{Receiver, bounded};
 use std::thread;
 
 pub fn init() {
     App::new()
-        .add_plugins((DefaultPlugins, MeshPickingPlugin))
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                resolution: WindowResolution::new(600., 600.),
+                ..default()
+            }),
+            ..default()
+        }))
+        .add_plugins(MeshPickingPlugin)
         .add_systems(Startup, startup)
         .add_systems(
             FixedUpdate,
