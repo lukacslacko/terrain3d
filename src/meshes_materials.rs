@@ -7,6 +7,7 @@ pub struct Materials {
     pub city: Handle<StandardMaterial>,
     pub selected_city: Handle<StandardMaterial>,
     pub highlighted_city: Handle<StandardMaterial>,
+    pub train: Handle<StandardMaterial>,
 }
 
 impl Materials {
@@ -29,11 +30,18 @@ impl Materials {
             metallic: 0.0,
             ..default()
         });
+        let train: Handle<StandardMaterial> = material_assets.add(StandardMaterial {
+            base_color: Color::srgb_u8(240, 240, 240),
+            perceptual_roughness: 0.0,
+            metallic: 0.0,
+            ..default()
+        });
 
         Self {
             city,
             selected_city,
             highlighted_city,
+            train,
         }
     }
 }
@@ -42,6 +50,7 @@ impl Materials {
 pub struct Meshes {
     pub city: Handle<Mesh>,
     pub path: Handle<Mesh>,
+    pub train: Handle<Mesh>,
 }
 
 impl Meshes {
@@ -50,8 +59,12 @@ impl Meshes {
             half_size: Vec3::splat(0.1),
         });
         let path = mesh_assets.add(Cuboid::default());
+        let train: Handle<Mesh> = mesh_assets.add(Cylinder {
+            radius: 0.05,
+            half_height: 0.1,
+        });
 
-        Self { city, path }
+        Self { city, path , train }
     }
 }
 
