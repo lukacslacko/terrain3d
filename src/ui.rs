@@ -1,6 +1,7 @@
 use crate::dijkstra::{GlobePoint, GlobePoints, GridPoint, dijkstra, get_closest_gridpoint};
 use crate::meshes_materials::{Materials, Meshes, make_globe};
 use crate::state::{Rail, RailInfo, State};
+use crate::train::Train;
 
 use bevy::{
     color::palettes::tailwind::*,
@@ -8,12 +9,10 @@ use bevy::{
     picking::pointer::PointerInteraction,
     prelude::*,
     render::mesh::{Mesh, Mesh3d},
-    time::common_conditions::on_timer,
     window::WindowResolution,
 };
 use crossbeam_channel::{Receiver, bounded};
 use std::thread;
-use std::time::Duration;
 
 pub fn init() {
     App::new()
@@ -47,7 +46,7 @@ pub fn init() {
         .insert_resource(SelectedCity::default())
         .add_systems(Update, draw_pointer)
         .add_systems(Update, try_getting_globe)
-        .add_systems(Update, move_trains.run_if(on_timer(Duration::from_millis(400))))
+        .add_systems(Update, move_trains)
         .run();
 }
 
@@ -71,13 +70,6 @@ struct City;
 
 #[derive(Resource, Default)]
 struct SelectedCity(Option<Entity>);
-
-#[derive(Component)]
-struct Train{
-    transforms: Vec<Transform>,
-    idx: usize,
-    forward: bool,
-}
 
 #[derive(Component)]
 struct Position {
@@ -220,23 +212,12 @@ fn create_path(
                 let mid_point = (from_point.pos + to_point.pos) / 2.0;
 
                 let dir_norm = direction.normalize();
-                let up = Vec3::cross(Vec3::cross(
-                    dir_norm,
-                    mid_point.normalize(),
-                ), dir_norm);
-                let rotation = Quat::from_mat3(
-                    &Mat3::from_cols(
-                        Vec3::cross(
-                            dir_norm,
-                            up,
-                        ),
-                        dir_norm,
-                        up,
-                    ),
-                );
-                
-                train_transforms.push(Transform::from_translation(mid_point * 1.01)
-                    .with_rotation(rotation));
+                let up = Vec3::cross(Vec3::cross(dir_norm, mid_point.normalize()), dir_norm);
+                let rotation =
+                    Quat::from_mat3(&Mat3::from_cols(Vec3::cross(dir_norm, up), dir_norm, up));
+
+                train_transforms
+                    .push(Transform::from_translation(mid_point * 1.01).with_rotation(rotation));
 
                 // If this piece of rail already exists, just change its material
                 // corresponding to the current path.
@@ -282,18 +263,16 @@ fn create_path(
     }
 
     // spawn a train at the first point of the path
-    let first_transform = *train_transforms.first().unwrap();
-    commands.spawn((
-        Train {
-            transforms: std::mem::take(&mut train_transforms),
-            idx: 0,
-            forward: true,
-        },
-        Mesh3d(train_mesh),
-        MeshMaterial3d(train_material),
-        first_transform,
-        PointerInteraction::default(),
-    ));
+    if let Some(mut train) = Train::new(train_transforms) {
+        let first_transform = train.current_transform();
+        commands.spawn((
+            train,
+            Mesh3d(train_mesh),
+            MeshMaterial3d(train_material),
+            first_transform,
+            PointerInteraction::default(),
+        ));
+    }
 }
 
 fn adjust_light(light_transform: &mut Transform, camera_transform: &Transform) {
@@ -517,32 +496,10 @@ fn highlight_city(
     }
 }
 
-fn move_trains(
-    mut trains: Query<(&mut Train, &mut Transform), With<Train>>,
-) {
+fn move_trains(time: Res<Time>, mut trains: Query<(&mut Train, &mut Transform), With<Train>>) {
+    let time_passed_seconds = time.delta().as_secs_f32();
+
     for (mut train, mut transform) in trains.iter_mut() {
-        if train.transforms.is_empty() {
-            continue; // No transforms to move
-        }
-
-        if train.forward {
-            if train.idx < train.transforms.len() - 1 {
-                train.idx += 1;
-            } else {
-                train.forward = false;
-            }
-        } else {  // backward
-            if train.idx > 0 {
-                train.idx -= 1;
-            } else {
-                train.forward = true;
-            }
-        }
-
-        let next_transform = &train.transforms[train.idx];
-
-        // Update the train's position
-        transform.translation = next_transform.translation;
-        transform.rotation = next_transform.rotation;
+        train.update(&mut transform, time_passed_seconds);
     }
 }
