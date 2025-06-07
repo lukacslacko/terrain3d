@@ -1,5 +1,12 @@
 # terrain3d
 
+## Profiling
+
+To profile, do `cargo install flamegraph`, then run with `cargo flamegraph` 
+as admin, eg in windows by searching for `cmd`, right clicking on 
+`Command Prompt` and selecting `Run as administrator`. 
+Finally, open the result flamegraph.svg in a browser.
+
 ## WebAssembly (WASM) Build & Deployment
 
 ### Local WASM Build
