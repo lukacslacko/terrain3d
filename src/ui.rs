@@ -518,10 +518,9 @@ fn highlight_city(
 }
 
 fn move_trains(
-    mut commands: Commands,
-    mut trains: Query<(Entity, &mut Train)>,
+    mut trains: Query<(&mut Train, &mut Transform), With<Train>>,
 ) {
-    for (entity, mut train) in trains.iter_mut() {
+    for (mut train, mut transform) in trains.iter_mut() {
         if train.transforms.is_empty() {
             continue; // No transforms to move
         }
@@ -543,8 +542,7 @@ fn move_trains(
         let next_transform = &train.transforms[train.idx];
 
         // Update the train's position
-        commands.entity(entity).insert(
-            *next_transform
-        );
+        transform.translation = next_transform.translation;
+        transform.rotation = next_transform.rotation;
     }
 }
