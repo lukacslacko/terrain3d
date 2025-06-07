@@ -12,36 +12,31 @@ pub struct Materials {
 
 impl Materials {
     pub fn new(material_assets: &mut Assets<StandardMaterial>) -> Self {
-        let city = material_assets.add(StandardMaterial {
-            base_color: Color::srgb_u8(124, 144, 255),
-            perceptual_roughness: 0.0,
-            metallic: 0.0,
-            ..default()
-        });
-        let selected_city = material_assets.add(StandardMaterial {
-            base_color: Color::WHITE,
-            perceptual_roughness: 0.0,
-            metallic: 0.0,
-            ..default()
-        });
-        let highlighted_city = material_assets.add(StandardMaterial {
-            base_color: Color::srgb_u8(190, 200, 255),
-            perceptual_roughness: 0.0,
-            metallic: 0.0,
-            ..default()
-        });
-        let train: Handle<StandardMaterial> = material_assets.add(StandardMaterial {
-            base_color: Color::srgb_u8(240, 240, 240),
-            perceptual_roughness: 0.0,
-            metallic: 0.0,
-            ..default()
-        });
-
         Self {
-            city,
-            selected_city,
-            highlighted_city,
-            train,
+            city: material_assets.add(StandardMaterial {
+                base_color: Color::srgb_u8(124, 144, 255),
+                perceptual_roughness: 0.0,
+                metallic: 0.0,
+                ..default()
+            }),
+            selected_city: material_assets.add(StandardMaterial {
+                base_color: Color::WHITE,
+                perceptual_roughness: 0.0,
+                metallic: 0.0,
+                ..default()
+            }),
+            highlighted_city: material_assets.add(StandardMaterial {
+                base_color: Color::srgb_u8(190, 200, 255),
+                perceptual_roughness: 0.0,
+                metallic: 0.0,
+                ..default()
+            }),
+            train: material_assets.add(StandardMaterial {
+                base_color: Color::srgb_u8(240, 240, 240),
+                perceptual_roughness: 0.0,
+                metallic: 0.0,
+                ..default()
+            }),
         }
     }
 }
@@ -55,16 +50,16 @@ pub struct Meshes {
 
 impl Meshes {
     pub fn new(mesh_assets: &mut Assets<Mesh>) -> Self {
-        let city = mesh_assets.add(Cuboid {
-            half_size: Vec3::splat(0.1),
-        });
-        let path = mesh_assets.add(Cuboid::default());
-        let train: Handle<Mesh> = mesh_assets.add(Cylinder {
-            radius: 0.05,
-            half_height: 0.1,
-        });
-
-        Self { city, path , train }
+        Self {
+            city: mesh_assets.add(Cuboid {
+                half_size: Vec3::splat(0.1),
+            }),
+            path: mesh_assets.add(Cuboid::default()),
+            train: mesh_assets.add(Cylinder {
+                radius: 0.05,
+                half_height: 0.1,
+            }),
+        }
     }
 }
 
