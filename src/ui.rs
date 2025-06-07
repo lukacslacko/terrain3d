@@ -117,10 +117,21 @@ fn startup(
 ) {
     let (tx, rx) = bounded(1);
     let config_for_make_globe = state.config.clone();
-    thread::spawn(move || {
+    
+    // WASM does not support threads ¯\_(ツ)_/¯.
+    #[cfg(target_arch = "wasm32")]
+    {
         let (globe_points, globe_mesh) = make_globe(&config_for_make_globe);
         tx.send((globe_points, globe_mesh)).unwrap();
-    });
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        thread::spawn(move || {
+            let (globe_points, globe_mesh) = make_globe(&config_for_make_globe);
+            tx.send((globe_points, globe_mesh)).unwrap();
+        });
+    }
 
     commands.insert_resource(GlobeReceiver { receiver: rx });
     commands.insert_resource(Meshes::new(&mut meshes));
@@ -230,20 +241,9 @@ fn create_path(
                 let mid_point = (from_point.pos + to_point.pos) / 2.0;
 
                 let dir_norm = direction.normalize();
-                let up = Vec3::cross(Vec3::cross(
-                    dir_norm,
-                    mid_point.normalize(),
-                ), dir_norm);
-                let rotation = Quat::from_mat3(
-                    &Mat3::from_cols(
-                        Vec3::cross(
-                            dir_norm,
-                            up,
-                        ),
-                        dir_norm,
-                        up,
-                    ),
-                );
+                let up = Vec3::cross(Vec3::cross(dir_norm, mid_point.normalize()), dir_norm);
+                let rotation =
+                    Quat::from_mat3(&Mat3::from_cols(Vec3::cross(dir_norm, up), dir_norm, up));
 
                 commands.entity(entity).insert((
                     Mesh3d(path_mesh.clone()),
