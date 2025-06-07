@@ -8,10 +8,12 @@ use bevy::{
     picking::pointer::PointerInteraction,
     prelude::*,
     render::mesh::{Mesh, Mesh3d},
+    time::common_conditions::on_timer,
     window::WindowResolution,
 };
 use crossbeam_channel::{Receiver, bounded};
 use std::thread;
+use std::time::Duration;
 
 pub fn init() {
     App::new()
@@ -45,6 +47,7 @@ pub fn init() {
         .insert_resource(SelectedCity::default())
         .add_systems(Update, draw_pointer)
         .add_systems(Update, try_getting_globe)
+        .add_systems(Update, move_trains.run_if(on_timer(Duration::from_millis(400))))
         .run();
 }
 
@@ -68,6 +71,13 @@ struct City;
 
 #[derive(Resource, Default)]
 struct SelectedCity(Option<Entity>);
+
+#[derive(Component)]
+struct Train{
+    transforms: Vec<Transform>,
+    idx: usize,
+    forward: bool,
+}
 
 #[derive(Component)]
 struct Position {
@@ -143,11 +153,14 @@ fn startup(
     ));
 }
 
+#[allow(clippy::too_many_arguments)]
 fn create_path(
     commands: &mut Commands<'_, '_>,
     state: &mut State,
     materials: &mut Assets<StandardMaterial>,
     path_mesh: Handle<Mesh>,
+    train_mesh: Handle<Mesh>,
+    train_material: Handle<StandardMaterial>,
     start: GridPoint,
     end: GridPoint,
 ) {
@@ -190,6 +203,8 @@ fn create_path(
 
     println!("Dijkstra done, path length: {}", path.len());
 
+    let mut train_transforms = Vec::new();
+
     for line in path.windows(2) {
         let (from, to) = (line[0], line[1]);
         if let Some(from_point) = state.globe_points.points.get(&from) {
@@ -198,6 +213,31 @@ fn create_path(
                     from: from.min(to),
                     to: from.max(to),
                 };
+
+                // compute the transform of both the path segment and train
+                let direction = to_point.pos - from_point.pos;
+                let length = direction.length();
+                let mid_point = (from_point.pos + to_point.pos) / 2.0;
+
+                let dir_norm = direction.normalize();
+                let up = Vec3::cross(Vec3::cross(
+                    dir_norm,
+                    mid_point.normalize(),
+                ), dir_norm);
+                let rotation = Quat::from_mat3(
+                    &Mat3::from_cols(
+                        Vec3::cross(
+                            dir_norm,
+                            up,
+                        ),
+                        dir_norm,
+                        up,
+                    ),
+                );
+                
+                train_transforms.push(Transform::from_translation(mid_point * 1.01)
+                    .with_rotation(rotation));
+
                 // If this piece of rail already exists, just change its material
                 // corresponding to the current path.
                 // We don't _really_ need this, but this demonstrates how to update
@@ -224,26 +264,6 @@ fn create_path(
                         // Other details can be added here.
                     },
                 );
-                // Create mesh connecting from_point to to_point.
-                let direction = to_point.pos - from_point.pos;
-                let length = direction.length();
-                let mid_point = (from_point.pos + to_point.pos) / 2.0;
-
-                let dir_norm = direction.normalize();
-                let up = Vec3::cross(Vec3::cross(
-                    dir_norm,
-                    mid_point.normalize(),
-                ), dir_norm);
-                let rotation = Quat::from_mat3(
-                    &Mat3::from_cols(
-                        Vec3::cross(
-                            dir_norm,
-                            up,
-                        ),
-                        dir_norm,
-                        up,
-                    ),
-                );
 
                 commands.entity(entity).insert((
                     Mesh3d(path_mesh.clone()),
@@ -260,6 +280,20 @@ fn create_path(
             }
         }
     }
+
+    // spawn a train at the first point of the path
+    let first_transform = *train_transforms.first().unwrap();
+    commands.spawn((
+        Train {
+            transforms: std::mem::take(&mut train_transforms),
+            idx: 0,
+            forward: true,
+        },
+        Mesh3d(train_mesh),
+        MeshMaterial3d(train_material),
+        first_transform,
+        PointerInteraction::default(),
+    ));
 }
 
 fn adjust_light(light_transform: &mut Transform, camera_transform: &Transform) {
@@ -429,6 +463,8 @@ fn on_mouse_left_click(
                             &mut state,
                             &mut all_materials,
                             meshes.path.clone(),
+                            meshes.train.clone(),
+                            materials.train.clone(),
                             cities.get(prev_selected).unwrap().1.gridpoint,
                             cities.get(clicked_city).unwrap().1.gridpoint,
                         );
@@ -478,5 +514,35 @@ fn highlight_city(
                     .insert(MeshMaterial3d(materials.city.clone()));
             }
         }
+    }
+}
+
+fn move_trains(
+    mut trains: Query<(&mut Train, &mut Transform), With<Train>>,
+) {
+    for (mut train, mut transform) in trains.iter_mut() {
+        if train.transforms.is_empty() {
+            continue; // No transforms to move
+        }
+
+        if train.forward {
+            if train.idx < train.transforms.len() - 1 {
+                train.idx += 1;
+            } else {
+                train.forward = false;
+            }
+        } else {  // backward
+            if train.idx > 0 {
+                train.idx -= 1;
+            } else {
+                train.forward = true;
+            }
+        }
+
+        let next_transform = &train.transforms[train.idx];
+
+        // Update the train's position
+        transform.translation = next_transform.translation;
+        transform.rotation = next_transform.rotation;
     }
 }
