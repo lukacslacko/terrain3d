@@ -8,13 +8,23 @@ use bevy::{
     picking::pointer::PointerInteraction,
     prelude::*,
     render::mesh::{Mesh, Mesh3d},
+    window::WindowResolution,
 };
 use crossbeam_channel::{Receiver, bounded};
 use std::thread;
 
 pub fn init() {
     App::new()
-        .add_plugins((DefaultPlugins, MeshPickingPlugin))
+        .add_plugins((
+            DefaultPlugins.set(WindowPlugin {
+                primary_window: Some(Window {
+                    resolution: WindowResolution::new(600., 600.),
+                    ..default()
+                }),
+                ..default()
+            }),
+            MeshPickingPlugin,
+        ))
         .add_systems(Startup, startup)
         .add_systems(
             FixedUpdate,
@@ -137,7 +147,7 @@ fn create_path(
     commands: &mut Commands<'_, '_>,
     state: &mut State,
     materials: &mut Assets<StandardMaterial>,
-    cylinder: Handle<Mesh>,
+    path_mesh: Handle<Mesh>,
     start: GridPoint,
     end: GridPoint,
 ) {
@@ -214,18 +224,34 @@ fn create_path(
                         // Other details can be added here.
                     },
                 );
-                // Create cylinder mesh connecting from_point to to_point.
+                // Create mesh connecting from_point to to_point.
                 let direction = to_point.pos - from_point.pos;
                 let length = direction.length();
                 let mid_point = (from_point.pos + to_point.pos) / 2.0;
-                let rotation = Quat::from_rotation_arc(Vec3::Y, direction.normalize());
+
+                let dir_norm = direction.normalize();
+                let up = Vec3::cross(Vec3::cross(
+                    dir_norm,
+                    mid_point.normalize(),
+                ), dir_norm);
+                let rotation = Quat::from_mat3(
+                    &Mat3::from_cols(
+                        Vec3::cross(
+                            dir_norm,
+                            up,
+                        ),
+                        dir_norm,
+                        up,
+                    ),
+                );
+
                 commands.entity(entity).insert((
-                    Mesh3d(cylinder.clone()),
+                    Mesh3d(path_mesh.clone()),
                     MeshMaterial3d(material.clone()),
                     Transform::from_scale(Vec3 {
-                        x: 1.0,
+                        x: 0.09,
                         y: length,
-                        z: 1.0,
+                        z: 0.04,
                     })
                     .with_translation(mid_point)
                     .with_rotation(rotation),

@@ -49,10 +49,7 @@ impl Meshes {
         let city = mesh_assets.add(Cuboid {
             half_size: Vec3::splat(0.1),
         });
-        let path = mesh_assets.add(Capsule3d {
-            half_length: 0.5,
-            radius: 0.05,
-        });
+        let path = mesh_assets.add(Cuboid::default());
 
         Self { city, path }
     }
