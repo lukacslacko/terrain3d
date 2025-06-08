@@ -537,11 +537,15 @@ fn move_train_cam(
     }
 }
 
+type CameraTransformQuery<'w, 's> = Query<'w, 's, &'static mut Transform, (With<MainCamera>, Without<Train>)>;
+type LightsTransformQuery<'w, 's> = Query<'w, 's, &'static mut Transform, (Without<MainCamera>, Without<Train>, With<PointLight>)>;
+type SelectedTrainQuery<'w, 's> = Query<'w, 's, (Entity, &'static Transform), (With<Train>, With<SelectedTrain>)>;
+
 fn on_escape(
     mut commands: Commands,
-    selected_train: Query<(Entity, &Transform), (With<Train>, With<SelectedTrain>)>,
-    mut camera_transform_q: Query<&mut Transform, (With<MainCamera>, Without<Train>)>,
-    mut lights_transform_q: Query<&mut Transform, (Without<MainCamera>, Without<Train>, With<PointLight>)>,
+    selected_train: SelectedTrainQuery,
+    mut camera_transform_q: CameraTransformQuery,
+    mut lights_transform_q: LightsTransformQuery,
 ) {
     // if there is a selected train, deselect it, and reset the camera
     if let Some((train_entity, train_transform)) = selected_train.iter().next() {
