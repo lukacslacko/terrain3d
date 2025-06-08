@@ -414,12 +414,24 @@ fn on_mouse_left_click(
     mut selected: ResMut<SelectedCity>,
     meshes: Res<Meshes>,
     materials: Res<Materials>,
+    trains: Query<(&Train, &Transform), With<Train>>,
+    mut camera_transform: Query<(&mut Transform, &MainCamera), Without<Train>>,
 ) {
-    for clicked_point in pointers
+    for (clicked_entity, clicked_point) in pointers
         .iter()
         .filter_map(|interaction| interaction.get_nearest_hit())
-        .filter_map(|(_entity, hit)| hit.position)
+        .filter_map(|(entity, hit)| hit.position.map(|pos| (entity, pos)))
     {
+        if let Ok((_train, train_transform)) = trains.get(*clicked_entity) {
+            println!("Clicked on a train");
+            let (mut transform, _camera) = camera_transform.single_mut().unwrap();
+
+            transform.translation = clicked_point * 1.02;
+            let rot = Quat::from_rotation_arc(Vec3::Y, Vec3::Z);
+            transform.rotation = train_transform.rotation * rot;
+            return;
+        }
+
         // Check if a city exists near the clicked point
         if let Some((clicked_city, _pos)) = cities.iter().find(|(_, pos)| {
             (pos.globe_point.pos - clicked_point).length() < state.config.min_city_distance / 2.0
