@@ -10,6 +10,9 @@ pub struct Train {
     pub segment_duration: Option<f32>,
 }
 
+#[derive(Component)]
+pub struct SelectedTrain;
+
 impl Train {
     pub fn new(transforms: Vec<Transform>) -> Option<Self> {
         if transforms.len() < 2 {

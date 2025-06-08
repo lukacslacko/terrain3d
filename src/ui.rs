@@ -1,7 +1,7 @@
 use crate::dijkstra::{GlobePoint, GlobePoints, GridPoint, dijkstra, get_closest_gridpoint};
 use crate::meshes_materials::{Materials, Meshes, make_globe};
 use crate::state::{Rail, RailInfo, State};
-use crate::train::Train;
+use crate::train::{SelectedTrain, Train};
 
 use bevy::{
     color::palettes::tailwind::*,
@@ -33,6 +33,8 @@ pub fn init() {
         )
         .add_systems(FixedUpdate, look_around_on_drag.run_if(ctrl_pressed))
         .add_systems(Update, zoom_with_scroll)
+        .add_systems(Update, 
+            (move_train_cam, on_escape.run_if(input_just_pressed(KeyCode::Escape))).chain())
         .add_systems(
             Update,
             on_mouse_right_click.run_if(input_just_pressed(MouseButton::Right)),
@@ -423,12 +425,9 @@ fn on_mouse_left_click(
         .filter_map(|(entity, hit)| hit.position.map(|pos| (entity, pos)))
     {
         if let Ok((_train, train_transform)) = trains.get(*clicked_entity) {
-            println!("Clicked on a train");
             let (mut transform, _camera) = camera_transform.single_mut().unwrap();
-
-            transform.translation = clicked_point * 1.02;
-            let rot = Quat::from_rotation_arc(Vec3::Y, Vec3::Z);
-            transform.rotation = train_transform.rotation * rot;
+            move_camera_to_train(&mut transform, train_transform);
+            commands.entity(*clicked_entity).insert(SelectedTrain);
             return;
         }
 
@@ -513,5 +512,48 @@ fn move_trains(time: Res<Time>, mut trains: Query<(&mut Train, &mut Transform), 
 
     for (mut train, mut transform) in trains.iter_mut() {
         train.update(&mut transform, time_passed_seconds);
+    }
+}
+
+fn move_camera_to_train(
+    camera_transform: &mut Transform,
+    train_transform: &Transform,
+) {
+    let rot = Quat::from_rotation_arc(Vec3::Y, Vec3::Z);
+    camera_transform.translation = train_transform.translation + train_transform.local_z() * 0.12;
+    camera_transform.rotation = train_transform.rotation * rot;
+    // rotate the camera a little bit downwards
+    camera_transform.rotate_local_x(-0.2);
+}
+
+fn move_train_cam(
+    mut camera_transform_q: Query<&mut Transform, (With<MainCamera>, Without<Train>)>,
+    trains_q: Query<(&Train, &Transform, &SelectedTrain), With<Train>>,
+) {
+    if let Ok((_train, train_transform, _)) = trains_q.single() {
+        if let Ok(mut camera_transform) = camera_transform_q.single_mut() {
+            move_camera_to_train(&mut camera_transform, train_transform);
+        }
+    }
+}
+
+fn on_escape(
+    mut commands: Commands,
+    selected_train: Query<(Entity, &Transform), (With<Train>, With<SelectedTrain>)>,
+    mut camera_transform_q: Query<&mut Transform, (With<MainCamera>, Without<Train>)>,
+    mut lights_transform_q: Query<&mut Transform, (Without<MainCamera>, Without<Train>, With<PointLight>)>,
+) {
+    // if there is a selected train, deselect it, and reset the camera
+    if let Some((train_entity, train_transform)) = selected_train.iter().next() {
+        commands.entity(train_entity).remove::<SelectedTrain>();
+
+        if let Ok(mut camera_transform) = camera_transform_q.single_mut() {
+            // println!("Resetting camera to orbital position above the train.");
+            camera_transform.translation = train_transform.translation.normalize() * 15.0;
+            camera_transform.look_at(Vec3::ZERO, Vec3::Z);
+            for mut light_transform in lights_transform_q.iter_mut() {
+                adjust_light(light_transform.as_mut(), camera_transform.as_mut());
+            }
+        }
     }
 }
