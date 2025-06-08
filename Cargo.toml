@@ -9,3 +9,6 @@ crossbeam-channel = "0.5.15"
 ordered-float = "5.0.0"
 priority-queue = "2.4.1"
 statrs = "0.18.0"
+
+[profile.release]
+debug = true
