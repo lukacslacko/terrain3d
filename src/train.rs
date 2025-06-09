@@ -62,8 +62,8 @@ impl Train {
     }
 
     fn bezier_2(&self, a: &Transform, b: &Transform, c: &Transform, ratio: f32) -> Transform {
-        let p_ab = self.between_transforms(&a, b, ratio);
-        let p_bc = self.between_transforms(b, &c, ratio);
+        let p_ab = self.between_transforms(a, b, ratio);
+        let p_bc = self.between_transforms(b, c, ratio);
         self.between_transforms(&p_ab, &p_bc, ratio)
     }
 
