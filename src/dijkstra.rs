@@ -44,13 +44,13 @@ fn cost(p: &GlobePoint, q: &GlobePoint, climbing_cost: f32) -> f32 {
     let penalty = p.penalty.max(q.penalty);
     let p_height = p.pos.length();
     let q_height = q.pos.length();
-    let unscaled_cost = p.pos.distance(q.pos) + climbing_cost * (p_height - q_height).abs();
+    let unscaled_cost = p.pos.distance(q.pos).powf(0.9) + climbing_cost * (p_height - q_height).abs();
     unscaled_cost * penalty
 }
 
 impl GlobePoints {
     pub fn build_graph(&mut self, grid_size: u32, climbing_cost: f32) {
-        let steps = 3i32;
+        let steps = 5i32;
         let size = grid_size as i32;
         let mut edges = 0;
         for (pts_done, (&grid, &p)) in self.points.iter().enumerate() {
