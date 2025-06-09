@@ -1,3 +1,6 @@
+use std::sync::{Arc, RwLock};
+use std::thread;
+
 use crate::dijkstra::{GlobePoint, GlobePoints, GridPoint, dijkstra, get_closest_gridpoint};
 use crate::meshes_materials::{Materials, Meshes, make_globe};
 use crate::state::{Rail, RailInfo, State};
@@ -11,8 +14,7 @@ use bevy::{
     render::mesh::{Mesh, Mesh3d},
     window::WindowResolution,
 };
-use crossbeam_channel::{Receiver, bounded};
-use std::thread;
+use crossbeam_channel::{Receiver, Sender, bounded};
 
 pub fn init() {
     App::new()
@@ -49,6 +51,7 @@ pub fn init() {
             Update,
             on_mouse_left_click.run_if(input_just_pressed(MouseButton::Left)),
         )
+        .add_systems(Update, create_path_if_dijkstra_ready)
         .add_systems(Update, highlight_city)
         .insert_resource(State::default())
         .insert_resource(SelectedCity::default())
@@ -90,6 +93,13 @@ struct GlobeReceiver {
     receiver: Receiver<(GlobePoints, Mesh)>,
 }
 
+#[derive(Resource)]
+struct DijkstraCommunication {
+    sender: Sender<Option<Vec<GridPoint>>>,
+    receiver: Receiver<Option<Vec<GridPoint>>>,
+    task: Option<(GridPoint, GridPoint)>,
+}
+
 type CameraTransformQuery<'w, 's> =
     Query<'w, 's, &'static mut Transform, (With<MainCamera>, Without<Train>)>;
 type LightsTransformQuery<'w, 's> =
@@ -106,7 +116,7 @@ fn try_getting_globe(
 ) {
     if let Ok((globe_points, globe_mesh)) = globe_receiver.receiver.try_recv() {
         println!("Received globe points and mesh.");
-        state.globe_points = globe_points;
+        state.globe_points = Arc::new(RwLock::new(globe_points));
         let globe_mesh_handle = meshes.add(globe_mesh);
         let globe_material = materials.add(StandardMaterial {
             base_color: Color::WHITE,
@@ -140,6 +150,14 @@ fn startup(
     });
 
     commands.insert_resource(GlobeReceiver { receiver: rx });
+
+    let (dijkstra_tx, dijkstra_rx) = bounded(1);
+    commands.insert_resource(DijkstraCommunication {
+        sender: dijkstra_tx,
+        receiver: dijkstra_rx,
+        task: None,
+    });
+
     commands.insert_resource(Meshes::new(&mut meshes));
     commands.insert_resource(Materials::new(&mut materials));
     commands.spawn((
@@ -160,19 +178,33 @@ fn startup(
     ));
 }
 
-#[allow(clippy::too_many_arguments)]
-fn create_path(
-    commands: &mut Commands<'_, '_>,
-    state: &mut State,
-    materials: &mut Assets<StandardMaterial>,
-    path_mesh: Handle<Mesh>,
-    train_mesh: Handle<Mesh>,
-    train_material: Handle<StandardMaterial>,
-    start: GridPoint,
-    end: GridPoint,
+fn create_path_if_dijkstra_ready(
+    mut commands: Commands,
+    mut state: ResMut<State>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut dijkstra_communication: ResMut<DijkstraCommunication>,
+    meshes: Res<Meshes>,
+    custom_materials: Res<Materials>,
 ) {
-    println!("Dijkstra");
-    let path = dijkstra(start, end, &state.globe_points);
+    let Some(task) = dijkstra_communication.task else {
+        return;
+    };
+    let Ok(dijkstra_result) = dijkstra_communication.receiver.try_recv() else {
+        return;
+    };
+    let Some(path) = dijkstra_result else {
+        println!("Dijkstra returned None, skipping path creation.");
+        return;
+    };
+
+    // Clear task to signal Dijkstra is ready for another task.
+    dijkstra_communication.task = None;
+
+    let start = task.0;
+    let end = task.1;
+
+    let path_mesh = meshes.path.clone();
+    let train_mesh = meshes.train.clone();
 
     // Create a custom color for the path based on start and end points.
     let r = ((27 * (start.1 + end.1)) % 256) as u8;
@@ -186,11 +218,17 @@ fn create_path(
         ..default()
     });
 
+    let globe_points_lock = Arc::clone(&state.globe_points);
+    let Ok(mut globe_points) = globe_points_lock.write() else {
+        println!("Failed to lock globe points. This should never happen.");
+        return;
+    };
+
     let reduction_factor = state.config.reduction_factor;
     // Apply cost reduction to edges in the path (only once per edge)
     for w in path.windows(2) {
         let (from, to) = (w[1], w[0]);
-        if let Some(edges) = state.globe_points.graph.get_mut(&from) {
+        if let Some(edges) = globe_points.graph.get_mut(&from) {
             for edge in edges.iter_mut() {
                 if edge.to == to && !edge.discounted {
                     edge.cost /= reduction_factor;
@@ -198,7 +236,7 @@ fn create_path(
                 }
             }
         }
-        if let Some(edges) = state.globe_points.graph.get_mut(&to) {
+        if let Some(edges) = globe_points.graph.get_mut(&to) {
             for edge in edges.iter_mut() {
                 if edge.to == from && !edge.discounted {
                     edge.cost /= reduction_factor;
@@ -214,8 +252,8 @@ fn create_path(
 
     for line in path.windows(2) {
         let (from, to) = (line[0], line[1]);
-        if let Some(from_point) = state.globe_points.points.get(&from) {
-            if let Some(to_point) = state.globe_points.points.get(&to) {
+        if let Some(from_point) = globe_points.points.get(&from) {
+            if let Some(to_point) = globe_points.points.get(&to) {
                 let rail = Rail {
                     from: from.min(to),
                     to: from.max(to),
@@ -283,7 +321,7 @@ fn create_path(
         commands.spawn((
             train,
             Mesh3d(train_mesh),
-            MeshMaterial3d(train_material),
+            MeshMaterial3d(custom_materials.train.clone()),
             first_transform,
             PointerInteraction::default(),
         ));
@@ -389,7 +427,11 @@ fn on_mouse_right_click(
         .filter_map(|(_entity, hit)| hit.position)
     {
         let gridpoint = get_closest_gridpoint(point, state.config.grid_size);
-        if let Some(&globe_point) = state.globe_points.points.get(&gridpoint) {
+        let Ok(globe_points) = state.globe_points.read() else {
+            println!("Failed to lock globe points. This should never happen.");
+            return;
+        };
+        if let Some(&globe_point) = globe_points.points.get(&gridpoint) {
             if globe_point.water {
                 println!("Can't place city on water: {:?}", gridpoint);
                 continue; // Skip water points
@@ -422,12 +464,11 @@ fn on_mouse_right_click(
 #[allow(clippy::too_many_arguments)]
 fn on_mouse_left_click(
     pointers: Query<&PointerInteraction>,
-    mut state: ResMut<State>,
-    mut all_materials: ResMut<Assets<StandardMaterial>>,
+    state: Res<State>,
+    mut dijkstra_communication: ResMut<DijkstraCommunication>,
     mut commands: Commands,
     cities: Query<(Entity, &Position), With<City>>,
     mut selected: ResMut<SelectedCity>,
-    meshes: Res<Meshes>,
     materials: Res<Materials>,
     trains: Query<(&Train, &Transform), With<Train>>,
     mut camera_transform: Query<(&mut Transform, &MainCamera), Without<Train>>,
@@ -461,16 +502,28 @@ fn on_mouse_left_click(
                     if prev_selected != clicked_city {
                         // Connect the cities
                         println!("Connecting {:?} and {:?}", prev_selected, clicked_city);
-                        create_path(
-                            &mut commands,
-                            &mut state,
-                            &mut all_materials,
-                            meshes.path.clone(),
-                            meshes.train.clone(),
-                            materials.train.clone(),
-                            cities.get(prev_selected).unwrap().1.gridpoint,
-                            cities.get(clicked_city).unwrap().1.gridpoint,
-                        );
+                        if dijkstra_communication.task.is_some() {
+                            println!("Dijkstra is busy, skipping connection.");
+                        } else {
+                            let globe_points_lock = Arc::clone(&state.globe_points);
+                            let sender = dijkstra_communication.sender.clone();
+                            let start = cities.get(prev_selected).unwrap().1.gridpoint;
+                            let end = cities.get(clicked_city).unwrap().1.gridpoint;
+                            dijkstra_communication.task = Some((start, end));
+                            thread::spawn({
+                                move || {
+                                    let Ok(globe_points) = globe_points_lock.read() else {
+                                        println!(
+                                            "Failed to lock globe points. This should never happen."
+                                        );
+                                        sender.send(None).unwrap();
+                                        return;
+                                    };
+                                    let path = dijkstra(start, end, &globe_points);
+                                    sender.send(Some(path)).unwrap();
+                                }
+                            });
+                        }
                     }
                     // Clear selection
                     selected.0 = None;

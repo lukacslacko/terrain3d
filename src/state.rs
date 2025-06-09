@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::{Arc, RwLock};
 
 use crate::dijkstra::{GlobePoints, GridPoint};
 use crate::perlin;
@@ -58,7 +59,7 @@ pub struct Rails {
 
 #[derive(Resource, Default)]
 pub struct State {
-    pub globe_points: GlobePoints,
+    pub globe_points: Arc<RwLock<GlobePoints>>,
     pub config: Config,
     pub rails: Rails,
 }
