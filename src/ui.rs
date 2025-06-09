@@ -33,8 +33,14 @@ pub fn init() {
         )
         .add_systems(FixedUpdate, look_around_on_drag.run_if(ctrl_pressed))
         .add_systems(Update, zoom_with_scroll)
-        .add_systems(Update, 
-            (update_train_camera, on_escape.run_if(input_just_pressed(KeyCode::Escape))).chain())
+        .add_systems(
+            Update,
+            (
+                update_train_camera,
+                on_escape.run_if(input_just_pressed(KeyCode::Escape)),
+            )
+                .chain(),
+        )
         .add_systems(
             Update,
             on_mouse_right_click.run_if(input_just_pressed(MouseButton::Right)),
@@ -84,10 +90,12 @@ struct GlobeReceiver {
     receiver: Receiver<(GlobePoints, Mesh)>,
 }
 
-type CameraTransformQuery<'w, 's> = Query<'w, 's, &'static mut Transform, (With<MainCamera>, Without<Train>)>;
-type LightsTransformQuery<'w, 's> = Query<'w, 's, &'static mut Transform, (Without<MainCamera>, Without<Train>, With<PointLight>)>;
-type SelectedTrainQuery<'w, 's> = Query<'w, 's, (Entity, &'static Transform), (With<Train>, With<SelectedTrain>)>;
-
+type CameraTransformQuery<'w, 's> =
+    Query<'w, 's, &'static mut Transform, (With<MainCamera>, Without<Train>)>;
+type LightsTransformQuery<'w, 's> =
+    Query<'w, 's, &'static mut Transform, (Without<MainCamera>, Without<Train>, With<PointLight>)>;
+type SelectedTrainQuery<'w, 's> =
+    Query<'w, 's, (Entity, &'static Transform), (With<Train>, With<SelectedTrain>)>;
 
 fn try_getting_globe(
     mut commands: Commands,
