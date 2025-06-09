@@ -34,7 +34,7 @@ pub fn init() {
         .add_systems(FixedUpdate, look_around_on_drag.run_if(ctrl_pressed))
         .add_systems(Update, zoom_with_scroll)
         .add_systems(Update, 
-            (move_train_cam, on_escape.run_if(input_just_pressed(KeyCode::Escape))).chain())
+            (update_train_camera, on_escape.run_if(input_just_pressed(KeyCode::Escape))).chain())
         .add_systems(
             Update,
             on_mouse_right_click.run_if(input_just_pressed(MouseButton::Right)),
@@ -531,7 +531,7 @@ fn move_camera_to_train(
     camera_transform.rotate_local_x(-0.2);
 }
 
-fn move_train_cam(
+fn update_train_camera(
     mut camera_transform_q: Query<&mut Transform, (With<MainCamera>, Without<Train>)>,
     trains_q: Query<(&Train, &Transform, &SelectedTrain), With<Train>>,
 ) {
