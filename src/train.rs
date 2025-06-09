@@ -62,10 +62,8 @@ impl Train {
     }
 
     fn bezier_2(&self, a: &Transform, b: &Transform, c: &Transform, ratio: f32) -> Transform {
-        let m_ab = self.between_transforms(a, b, 0.5);
-        let m_bc = self.between_transforms(b, c, 0.5);
-        let p_ab = self.between_transforms(&m_ab, b, ratio);
-        let p_bc = self.between_transforms(b, &m_bc, ratio);
+        let p_ab = self.between_transforms(&a, b, ratio);
+        let p_bc = self.between_transforms(b, &c, ratio);
         self.between_transforms(&p_ab, &p_bc, ratio)
     }
 
@@ -80,7 +78,7 @@ impl Train {
 
         a, b, c, d are rail segment endpoints, m_ab, m_bc, m_cd are the midpoints.
 
-        The spline connects the midpoints, with the segmen duration being the control
+        The spline connects the midpoints, with the segment endpoints being the control
         points.
 
         */
@@ -95,14 +93,17 @@ impl Train {
         let b = self.transform_at(b_idx);
         let c = self.transform_at(c_idx);
         let d = self.transform_at(d_idx);
+        let m_ab = self.between_transforms(&a, &b, 0.5);
+        let m_bc = self.between_transforms(&b, &c, 0.5);
+        let m_cd = self.between_transforms(&c, &d, 0.5);
 
         let along_segment_ratio =
             self.seconds_spent_within_segment / self.segment_duration.unwrap();
 
         if along_segment_ratio <= 0.5 {
-            self.bezier_2(&a, &b, &c, along_segment_ratio + 0.5)
+            self.bezier_2(&m_ab, &b, &m_bc, along_segment_ratio + 0.5)
         } else {
-            self.bezier_2(&b, &c, &d, along_segment_ratio - 0.5)
+            self.bezier_2(&m_bc, &c, &m_cd, along_segment_ratio - 0.5)
         }
     }
 
