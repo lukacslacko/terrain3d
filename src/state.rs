@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::{Arc, RwLock};
 
 use crate::dijkstra::{GlobePoints, GridPoint};
 use crate::perlin;
@@ -8,7 +9,7 @@ use bevy::prelude::*;
 #[derive(Debug, Clone)]
 pub struct Config {
     pub grid_size: u32,
-    pub sea_level: f32, // sea level for the globe
+    pub sea_level: f32,  // sea level for the globe
     pub snow_level: f32, // snow level above sea level
     pub perlin_config: perlin::PerlinConfig,
     pub water_penalty: f32,
@@ -58,7 +59,7 @@ pub struct Rails {
 
 #[derive(Resource, Default)]
 pub struct State {
-    pub globe_points: GlobePoints,
+    pub globe_points: Arc<RwLock<GlobePoints>>,
     pub config: Config,
     pub rails: Rails,
 }
