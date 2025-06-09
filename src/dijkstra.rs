@@ -50,7 +50,7 @@ fn cost(p: &GlobePoint, q: &GlobePoint, climbing_cost: f32) -> f32 {
 
 impl GlobePoints {
     pub fn build_graph(&mut self, grid_size: u32, climbing_cost: f32) {
-        let steps = 5i32;
+        let steps = 7i32;
         let size = grid_size as i32;
         let mut edges = 0;
         for (pts_done, (&grid, &p)) in self.points.iter().enumerate() {
