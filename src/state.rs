@@ -21,7 +21,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            grid_size: 384,
+            grid_size: 256,
             sea_level: 5.0,
             snow_level: 0.5,
             perlin_config: perlin::PerlinConfig {
