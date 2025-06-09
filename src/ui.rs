@@ -33,8 +33,14 @@ pub fn init() {
         )
         .add_systems(FixedUpdate, look_around_on_drag.run_if(ctrl_pressed))
         .add_systems(Update, zoom_with_scroll)
-        .add_systems(Update, 
-            (update_train_camera, on_escape.run_if(input_just_pressed(KeyCode::Escape))).chain())
+        .add_systems(
+            Update,
+            (
+                update_train_camera,
+                on_escape.run_if(input_just_pressed(KeyCode::Escape)),
+            )
+                .chain(),
+        )
         .add_systems(
             Update,
             on_mouse_right_click.run_if(input_just_pressed(MouseButton::Right)),
@@ -84,10 +90,12 @@ struct GlobeReceiver {
     receiver: Receiver<(GlobePoints, Mesh)>,
 }
 
-type CameraTransformQuery<'w, 's> = Query<'w, 's, &'static mut Transform, (With<MainCamera>, Without<Train>)>;
-type LightsTransformQuery<'w, 's> = Query<'w, 's, &'static mut Transform, (Without<MainCamera>, Without<Train>, With<PointLight>)>;
-type SelectedTrainQuery<'w, 's> = Query<'w, 's, (Entity, &'static Transform), (With<Train>, With<SelectedTrain>)>;
-
+type CameraTransformQuery<'w, 's> =
+    Query<'w, 's, &'static mut Transform, (With<MainCamera>, Without<Train>)>;
+type LightsTransformQuery<'w, 's> =
+    Query<'w, 's, &'static mut Transform, (Without<MainCamera>, Without<Train>, With<PointLight>)>;
+type SelectedTrainQuery<'w, 's> =
+    Query<'w, 's, (Entity, &'static Transform), (With<Train>, With<SelectedTrain>)>;
 
 fn try_getting_globe(
     mut commands: Commands,
@@ -431,7 +439,7 @@ fn on_mouse_left_click(
     {
         if let Ok((_train, train_transform)) = trains.get(*clicked_entity) {
             let (mut transform, _camera) = camera_transform.single_mut().unwrap();
-            move_camera_to_train(&mut transform, train_transform);
+            move_camera_to_train(&mut transform, train_transform, true);
             commands.entity(*clicked_entity).insert(SelectedTrain);
             return;
         }
@@ -523,10 +531,18 @@ fn move_trains(time: Res<Time>, mut trains: Query<(&mut Train, &mut Transform), 
 fn move_camera_to_train(
     camera_transform: &mut Transform,
     train_transform: &Transform,
+    forward: bool,
 ) {
-    let rot = Quat::from_rotation_arc(Vec3::Y, Vec3::Z);
+    let rot = if forward {
+        Quat::from_rotation_arc(Vec3::Y, Vec3::Z)
+    } else {
+        Quat::from_rotation_arc(Vec3::Y, -Vec3::Z)
+    };
     camera_transform.translation = train_transform.translation + train_transform.local_z() * 0.12;
     camera_transform.rotation = train_transform.rotation * rot;
+    if !forward {
+        camera_transform.rotate_local_z(std::f32::consts::PI);
+    }
     // rotate the camera a little bit downwards
     camera_transform.rotate_local_x(-0.2);
 }
@@ -535,9 +551,9 @@ fn update_train_camera(
     mut camera_transform_q: Query<&mut Transform, (With<MainCamera>, Without<Train>)>,
     trains_q: Query<(&Train, &Transform, &SelectedTrain), With<Train>>,
 ) {
-    if let Ok((_train, train_transform, _)) = trains_q.single() {
+    if let Ok((train, train_transform, _)) = trains_q.single() {
         if let Ok(mut camera_transform) = camera_transform_q.single_mut() {
-            move_camera_to_train(&mut camera_transform, train_transform);
+            move_camera_to_train(&mut camera_transform, train_transform, train.forward);
         }
     }
 }
