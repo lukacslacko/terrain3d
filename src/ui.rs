@@ -84,6 +84,11 @@ struct GlobeReceiver {
     receiver: Receiver<(GlobePoints, Mesh)>,
 }
 
+type CameraTransformQuery<'w, 's> = Query<'w, 's, &'static mut Transform, (With<MainCamera>, Without<Train>)>;
+type LightsTransformQuery<'w, 's> = Query<'w, 's, &'static mut Transform, (Without<MainCamera>, Without<Train>, With<PointLight>)>;
+type SelectedTrainQuery<'w, 's> = Query<'w, 's, (Entity, &'static Transform), (With<Train>, With<SelectedTrain>)>;
+
+
 fn try_getting_globe(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -536,10 +541,6 @@ fn move_train_cam(
         }
     }
 }
-
-type CameraTransformQuery<'w, 's> = Query<'w, 's, &'static mut Transform, (With<MainCamera>, Without<Train>)>;
-type LightsTransformQuery<'w, 's> = Query<'w, 's, &'static mut Transform, (Without<MainCamera>, Without<Train>, With<PointLight>)>;
-type SelectedTrainQuery<'w, 's> = Query<'w, 's, (Entity, &'static Transform), (With<Train>, With<SelectedTrain>)>;
 
 fn on_escape(
     mut commands: Commands,
