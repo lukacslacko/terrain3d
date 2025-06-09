@@ -129,7 +129,7 @@ pub fn make_globe(config: &crate::state::Config) -> (GlobePoints, Mesh) {
             for j in 0..m {
                 let u = i as f32 / grid_size as f32;
                 let v = j as f32 / grid_size as f32;
-                
+
                 let (noise, pos) = surface(u, v, face);
 
                 let height = noise - sea_level;

@@ -45,7 +45,8 @@ fn cost(p: &GlobePoint, q: &GlobePoint, climbing_cost: f32) -> f32 {
     let p_height = p.pos.length();
     let q_height = q.pos.length();
     // Slightly prefer longer steps. 5^0.9 = 4.25, for example.
-    let unscaled_cost = p.pos.distance(q.pos).powf(0.9) + climbing_cost * (p_height - q_height).abs();
+    let unscaled_cost =
+        p.pos.distance(q.pos).powf(0.9) + climbing_cost * (p_height - q_height).abs();
     unscaled_cost * penalty
 }
 
