@@ -51,7 +51,7 @@ pub fn init() {
             Update,
             on_mouse_left_click.run_if(input_just_pressed(MouseButton::Left)),
         )
-        .add_systems(Update, create_path_if_dijsktra_ready)
+        .add_systems(Update, create_path_if_dijkstra_ready)
         .add_systems(Update, highlight_city)
         .insert_resource(State::default())
         .insert_resource(SelectedCity::default())
@@ -178,7 +178,7 @@ fn startup(
     ));
 }
 
-fn create_path_if_dijsktra_ready(
+fn create_path_if_dijkstra_ready(
     mut commands: Commands,
     mut state: ResMut<State>,
     mut materials: ResMut<Assets<StandardMaterial>>,
@@ -465,7 +465,7 @@ fn on_mouse_right_click(
 fn on_mouse_left_click(
     pointers: Query<&PointerInteraction>,
     state: Res<State>,
-    mut dijksta_communication: ResMut<DijkstraCommunication>,
+    mut dijkstra_communication: ResMut<DijkstraCommunication>,
     mut commands: Commands,
     cities: Query<(Entity, &Position), With<City>>,
     mut selected: ResMut<SelectedCity>,
@@ -502,14 +502,14 @@ fn on_mouse_left_click(
                     if prev_selected != clicked_city {
                         // Connect the cities
                         println!("Connecting {:?} and {:?}", prev_selected, clicked_city);
-                        if dijksta_communication.task.is_some() {
+                        if dijkstra_communication.task.is_some() {
                             println!("Dijkstra is busy, skipping connection.");
                         } else {
                             let globe_points_lock = Arc::clone(&state.globe_points);
-                            let sender = dijksta_communication.sender.clone();
+                            let sender = dijkstra_communication.sender.clone();
                             let start = cities.get(prev_selected).unwrap().1.gridpoint;
                             let end = cities.get(clicked_city).unwrap().1.gridpoint;
-                            dijksta_communication.task = Some((start, end));
+                            dijkstra_communication.task = Some((start, end));
                             thread::spawn({
                                 move || {
                                     let Ok(globe_points) = globe_points_lock.read() else {
