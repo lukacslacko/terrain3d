@@ -28,12 +28,14 @@ impl Train {
         })
     }
 
-    fn compute_segment_duration(&mut self) {
-        let start = self.transforms[self.idx].translation;
-        let end = self.transforms[self.next_idx].translation;
-        let distance = start.distance(end);
-        let start_height = start.length();
-        let end_height = end.length();
+    fn transform_at(&self, idx: i32) -> Transform {
+        self.transforms[idx.clamp(0, self.transforms.len() as i32 - 1) as usize]
+    }
+
+    fn duration_between(&self, start: &Transform, end: &Transform) -> f32 {
+        let distance = start.translation.distance(end.translation);
+        let start_height = start.translation.length();
+        let end_height = end.translation.length();
         let height_difference = end_height - start_height;
         let steepness = height_difference / distance;
         let half_speed_steepness = 0.2; // Steepness at which the speed is halved
@@ -41,26 +43,67 @@ impl Train {
         if height_difference > 0.0 {
             velocity = velocity * half_speed_steepness / (steepness + half_speed_steepness);
         }
-        self.segment_duration = Some(distance / velocity);
+        distance / velocity
+    }
+
+    fn compute_segment_duration(&mut self) {
+        self.segment_duration = Some(self.duration_between(
+            &self.transform_at(self.idx as i32),
+            &self.transform_at(self.next_idx as i32),
+        ));
+    }
+
+    fn between_transforms(&self, from: &Transform, to: &Transform, ratio: f32) -> Transform {
+        Transform {
+            translation: from.translation.lerp(to.translation, ratio),
+            rotation: from.rotation.slerp(to.rotation, ratio),
+            scale: from.scale.lerp(to.scale, ratio),
+        }
+    }
+
+    fn bezier_2(&self, a: &Transform, b: &Transform, c: &Transform, ratio: f32) -> Transform {
+        let p_ab = self.between_transforms(a, b, ratio);
+        let p_bc = self.between_transforms(b, c, ratio);
+        self.between_transforms(&p_ab, &p_bc, ratio)
     }
 
     pub fn current_transform(&mut self) -> Transform {
         if self.segment_duration.is_none() {
             self.compute_segment_duration();
         }
+
+        /*
+
+        a - m_ab - b - m_bc - c - m_cd - d
+
+        a, b, c, d are rail segment endpoints, m_ab, m_bc, m_cd are the midpoints.
+
+        The spline connects the midpoints, with the segment endpoints being the control
+        points.
+
+        */
+
+        let idx_diff = self.next_idx as i32 - self.idx as i32;
+        let b_idx = self.idx as i32;
+        let a_idx = b_idx - idx_diff;
+        let c_idx = b_idx + idx_diff;
+        let d_idx = c_idx + idx_diff;
+
+        let a = self.transform_at(a_idx);
+        let b = self.transform_at(b_idx);
+        let c = self.transform_at(c_idx);
+        let d = self.transform_at(d_idx);
+        let m_ab = self.between_transforms(&a, &b, 0.5);
+        let m_bc = self.between_transforms(&b, &c, 0.5);
+        let m_cd = self.between_transforms(&c, &d, 0.5);
+
         let along_segment_ratio =
             self.seconds_spent_within_segment / self.segment_duration.unwrap();
-        Transform {
-            translation: self.transforms[self.idx].translation.lerp(
-                self.transforms[self.next_idx].translation,
-                along_segment_ratio,
-            ),
-            rotation: self.transforms[self.idx]
-                .rotation
-                .slerp(self.transforms[self.next_idx].rotation, along_segment_ratio),
-            scale: self.transforms[self.idx]
-                .scale
-                .lerp(self.transforms[self.next_idx].scale, along_segment_ratio),
+
+        if along_segment_ratio <= 0.5 {
+            self.bezier_2(&m_ab, &b, &m_bc, along_segment_ratio + 0.5)
+        } else {
+            self.bezier_2(&m_bc, &c, &m_cd, along_segment_ratio - 0.5)
         }
     }
 
