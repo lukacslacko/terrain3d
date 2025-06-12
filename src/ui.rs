@@ -173,6 +173,10 @@ fn startup(
 
     commands.spawn((
         Camera3d::default(),
+        Projection::Perspective(PerspectiveProjection {
+            fov: std::f32::consts::PI / 3.0, // 60 degrees in radians
+            ..default()
+        }),
         MainCamera,
         Transform::from_xyz(0.0, 0.0, 15.0).looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Z),
     ));
