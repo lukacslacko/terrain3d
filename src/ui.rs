@@ -15,6 +15,7 @@ use bevy::{
     window::WindowResolution,
 };
 use crossbeam_channel::{Receiver, Sender, bounded};
+use rand::{Rng, SeedableRng};
 
 pub fn init() {
     App::new()
@@ -53,7 +54,15 @@ pub fn init() {
         )
         .add_systems(Update, create_path_if_dijkstra_ready)
         .add_systems(Update, highlight_city)
-        .insert_resource(State::default())
+        .insert_resource(State {
+            config: crate::state::Config::default(),
+            globe_points: Arc::new(RwLock::new(GlobePoints::default())),
+            rails: crate::state::Rails::default(),
+            rng: rand::rngs::StdRng::seed_from_u64(
+                crate::state::Config::default().perlin_config.seed as u64,
+            ),
+            create_new_city_next: true,
+        })
         .insert_resource(SelectedCity::default())
         .add_systems(Update, draw_pointer)
         .add_systems(Update, try_getting_globe)
@@ -187,6 +196,7 @@ fn create_path_if_dijkstra_ready(
     mut state: ResMut<State>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut dijkstra_communication: ResMut<DijkstraCommunication>,
+    cities: Query<(Entity, &Position), With<City>>,
     meshes: Res<Meshes>,
     custom_materials: Res<Materials>,
 ) {
@@ -274,7 +284,7 @@ fn create_path_if_dijkstra_ready(
                     Quat::from_mat3(&Mat3::from_cols(Vec3::cross(dir_norm, up), dir_norm, up));
 
                 train_transforms
-                    .push(Transform::from_translation(mid_point * 1.01).with_rotation(rotation));
+                    .push(Transform::from_translation(mid_point * 1.005).with_rotation(rotation));
 
                 // If this piece of rail already exists, just change its material
                 // corresponding to the current path.
@@ -307,7 +317,7 @@ fn create_path_if_dijkstra_ready(
                     Mesh3d(path_mesh.clone()),
                     MeshMaterial3d(material.clone()),
                     Transform::from_scale(Vec3 {
-                        x: 0.09,
+                        x: 0.06,
                         y: length,
                         z: 0.04,
                     })
@@ -329,6 +339,105 @@ fn create_path_if_dijkstra_ready(
             first_transform,
             PointerInteraction::default(),
         ));
+    }
+
+    let add_another_train = state.config.num_automatic_trains > 0;
+    if add_another_train {
+        state.config.num_automatic_trains -= 1;
+        println!(
+            "Adding another train, {} left to add.",
+            state.config.num_automatic_trains
+        );
+        let grid_size = state.config.grid_size;
+
+        let prev_city_index = state.rng.random_range(0..cities.iter().len());
+        let Some(prev_city) = cities
+            .iter()
+            .nth(prev_city_index)
+            .map(|(_, pos)| pos.gridpoint)
+        else {
+            panic!("Getting previous city failed.");
+        };
+
+        let mut other_city;
+
+        let other_prev_city_index = loop {
+            let candidate = state.rng.random_range(0..cities.iter().len());
+            if candidate != prev_city_index {
+                break candidate;
+            }
+        };
+
+        other_city = cities
+            .iter()
+            .nth(other_prev_city_index)
+            .map(|(_, pos)| pos.gridpoint);
+
+        if state.create_new_city_next {
+            // Find a place for a new city.
+            let new_city = loop {
+                let candidate_gridpoint = (
+                    state.rng.random_range(0..6),
+                    state.rng.random_range(0..=grid_size),
+                    state.rng.random_range(0..=grid_size),
+                );
+                let height_threshold = state.rng.random::<f32>().powf(3.0) + 0.01;
+                let Some(&globe_point) = globe_points.points.get(&candidate_gridpoint) else {
+                    continue; // Skip if no GlobePoint found for this gridpoint
+                };
+                if globe_point.water {
+                    continue; // Skip water points
+                }
+                if cities.iter().any(|(_, pos)| {
+                    (pos.globe_point.pos - globe_point.pos).length()
+                        < state.config.min_city_distance
+                }) {
+                    continue; // Skip if a city already exists at this point
+                }
+                let height_ratio =
+                    (globe_point.pos.length() - state.config.sea_level) / state.config.snow_level;
+                if height_ratio < height_threshold {
+                    // Spawn a city at this point
+                    commands.spawn((
+                        City,
+                        Position {
+                            gridpoint: candidate_gridpoint,
+                            globe_point,
+                        },
+                        Mesh3d(meshes.city.clone()),
+                        MeshMaterial3d(custom_materials.city.clone()),
+                        Transform::from_xyz(
+                            globe_point.pos[0],
+                            globe_point.pos[1],
+                            globe_point.pos[2],
+                        )
+                        .looking_at(Vec3::ZERO, Vec3::Z),
+                    ));
+                    break candidate_gridpoint; // Exit the loop after spawning a city
+                }
+            };
+            other_city = Some(new_city);
+        }
+
+        state.create_new_city_next = !state.create_new_city_next;
+        let Some(target_city) = other_city else {
+            panic!("No target city found, skipping train creation.");
+        };
+
+        let globe_points_lock = Arc::clone(&state.globe_points);
+        let sender = dijkstra_communication.sender.clone();
+        dijkstra_communication.task = Some((prev_city, target_city));
+        thread::spawn({
+            move || {
+                let Ok(globe_points) = globe_points_lock.read() else {
+                    println!("Failed to lock globe points. This should never happen.");
+                    sender.send(None).unwrap();
+                    return;
+                };
+                let path = dijkstra(prev_city, target_city, &globe_points);
+                sender.send(Some(path)).unwrap();
+            }
+        });
     }
 }
 

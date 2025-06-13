@@ -7,6 +7,7 @@ pub struct PerlinConfig {
     pub lacunarity: f32,
     pub persistence: f32,
     pub octaves: u32,
+    pub amplitude: f32,
 }
 
 pub struct Perlin {
@@ -17,7 +18,7 @@ impl Perlin {
     pub fn noise(&self, x: f32, y: f32, z: f32) -> f32 {
         let mut total = 0.0;
         let mut frequency = self.config.frequency;
-        let mut amplitude = 1.0;
+        let mut amplitude = self.config.amplitude;
 
         for _ in 0..self.config.octaves {
             total += self.single_layer(x * frequency, y * frequency, z * frequency) * amplitude;

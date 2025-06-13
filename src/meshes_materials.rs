@@ -56,8 +56,8 @@ impl Meshes {
             }),
             path: mesh_assets.add(Cuboid::default()),
             train: mesh_assets.add(Cylinder {
-                radius: 0.05,
-                half_height: 0.1,
+                radius: 0.025,
+                half_height: 0.08,
             }),
         }
     }
