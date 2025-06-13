@@ -8,6 +8,7 @@ bevy = "0.16.0"
 crossbeam-channel = "0.5.15"
 ordered-float = "5.0.0"
 priority-queue = "2.4.1"
+rand = "0.9.1"
 statrs = "0.18.0"
 
 [profile.release]
