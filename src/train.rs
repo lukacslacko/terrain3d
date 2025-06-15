@@ -1,8 +1,10 @@
+use crate::state::{Rail, State};
 use bevy::prelude::*;
+use std::sync::atomic::Ordering;
 
 #[derive(Component)]
 pub struct Train {
-    pub transforms: Vec<Transform>,
+    pub transforms: Vec<(Transform, Rail)>,
     pub idx: usize,
     pub next_idx: usize,
     pub forward: bool,
@@ -14,7 +16,7 @@ pub struct Train {
 pub struct SelectedTrain;
 
 impl Train {
-    pub fn new(transforms: Vec<Transform>) -> Option<Self> {
+    pub fn new(transforms: Vec<(Transform, Rail)>) -> Option<Self> {
         if transforms.len() < 2 {
             return None;
         }
@@ -29,7 +31,7 @@ impl Train {
     }
 
     fn transform_at(&self, idx: i32) -> Transform {
-        self.transforms[idx.clamp(0, self.transforms.len() as i32 - 1) as usize]
+        self.transforms[idx.clamp(0, self.transforms.len() as i32 - 1) as usize].0
     }
 
     fn duration_between(&self, start: &Transform, end: &Transform) -> f32 {
@@ -107,13 +109,39 @@ impl Train {
         }
     }
 
-    pub fn update(&mut self, transform: &mut Transform, time_passed_seconds: f32) {
+    pub fn update(
+        &mut self,
+        transform: &mut Transform,
+        time_passed_seconds: f32,
+        state: &State,
+        commands: &mut Commands,
+        materials: &mut Assets<StandardMaterial>,
+    ) {
         if self.segment_duration.is_none() {
             self.compute_segment_duration();
         }
 
         self.seconds_spent_within_segment += time_passed_seconds;
         if self.seconds_spent_within_segment >= self.segment_duration.unwrap() {
+            let rail_info = state.rails.rails.get(&self.transforms[self.idx].1).unwrap();
+
+            rail_info.counter.fetch_add(1, Ordering::Relaxed);
+
+            let r = 0u8;
+            let g = 0u8;
+            let b = 0u8;
+
+            let material = materials.add(StandardMaterial {
+                base_color: Color::srgb_u8(r, g, b),
+                perceptual_roughness: 0.0,
+                metallic: 0.0,
+                ..default()
+            });
+
+            commands
+                .entity(rail_info.entity)
+                .insert((MeshMaterial3d(material),));
+
             // Move to the next segment.
             self.idx = self.next_idx;
 
