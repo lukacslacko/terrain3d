@@ -123,16 +123,20 @@ impl Train {
 
         self.seconds_spent_within_segment += time_passed_seconds;
         if self.seconds_spent_within_segment >= self.segment_duration.unwrap() {
+            // Move to the next segment.
+            self.idx = self.next_idx;
+
             let rail_info = state.rails.rails.get(&self.transforms[self.idx].1).unwrap();
 
-            rail_info.counter.fetch_add(1, Ordering::Relaxed);
+            let count = rail_info.counter.fetch_add(1, Ordering::Relaxed) + 1;
 
-            let r = 0u8;
-            let g = 0u8;
-            let b = 0u8;
+            let max_rail_usage =
+                count.max(state.max_rail_usage.fetch_max(count, Ordering::Relaxed));
+
+            let color = (((max_rail_usage - count) as f32 / max_rail_usage as f32) * 255.) as u8;
 
             let material = materials.add(StandardMaterial {
-                base_color: Color::srgb_u8(r, g, b),
+                base_color: Color::srgb_u8(255, color, color),
                 perceptual_roughness: 0.0,
                 metallic: 0.0,
                 ..default()
@@ -141,9 +145,6 @@ impl Train {
             commands
                 .entity(rail_info.entity)
                 .insert((MeshMaterial3d(material),));
-
-            // Move to the next segment.
-            self.idx = self.next_idx;
 
             // Account for the remaining time.
             self.seconds_spent_within_segment =
