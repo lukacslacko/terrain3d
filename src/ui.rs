@@ -283,9 +283,7 @@ fn create_path_if_dijkstra_ready(
                 let rotation =
                     Quat::from_mat3(&Mat3::from_cols(Vec3::cross(dir_norm, up), dir_norm, up));
 
-                train_transforms
-                    .push(Transform::from_translation(mid_point * 1.005).with_rotation(rotation));
-
+                let entity =
                 // If this piece of rail already exists, just change its material
                 // corresponding to the current path.
                 // We don't _really_ need this, but this demonstrates how to update
@@ -294,24 +292,32 @@ fn create_path_if_dijkstra_ready(
                     commands
                         .entity(rail_info.entity)
                         .insert((MeshMaterial3d(material.clone()),));
-                    continue;
-                }
-                // Otherwise, create a new entity for the rail and store it in the
-                // Rails resource.
-                //
-                // We first create an empty entity in order to already have its ID
-                // which we can key the RailInfo with.
-                //
-                // We'll update it with all the details the same way as we've updated
-                // the existing rail piece above.
-                let entity = commands.spawn_empty().id();
-                state.rails.rails.insert(
+                    rail_info.entity
+                } else {
+                    // Otherwise, create a new entity for the rail and store it in the
+                    // Rails resource.
+                    //
+                    // We first create an empty entity in order to already have its ID
+                    // which we can key the RailInfo with.
+                    //
+                    // We'll update it with all the details the same way as we've updated
+                    // the existing rail piece above.
+                    let entity = commands.spawn_empty().id();
+                    state.rails.rails.insert(
+                        rail,
+                        RailInfo {
+                            entity,
+                            counter: 0.into(),
+                            // Other details can be added here.
+                        },
+                    );
+                    entity
+                };
+
+                train_transforms.push((
+                    Transform::from_translation(mid_point * 1.005).with_rotation(rotation),
                     rail,
-                    RailInfo {
-                        entity,
-                        // Other details can be added here.
-                    },
-                );
+                ));
 
                 commands.entity(entity).insert((
                     Mesh3d(path_mesh.clone()),
@@ -686,11 +692,23 @@ fn highlight_city(
     }
 }
 
-fn move_trains(time: Res<Time>, mut trains: Query<(&mut Train, &mut Transform), With<Train>>) {
+fn move_trains(
+    mut commands: Commands,
+    state: Res<State>,
+    time: Res<Time>,
+    mut trains: Query<(&mut Train, &mut Transform), With<Train>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
     let time_passed_seconds = time.delta().as_secs_f32();
 
     for (mut train, mut transform) in trains.iter_mut() {
-        train.update(&mut transform, time_passed_seconds);
+        train.update(
+            &mut transform,
+            time_passed_seconds,
+            &state,
+            &mut commands,
+            &mut materials,
+        );
     }
 }
 
