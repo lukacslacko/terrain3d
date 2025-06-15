@@ -69,4 +69,5 @@ pub struct State {
     pub rails: Rails,
     pub rng: rand::rngs::StdRng,
     pub create_new_city_next: bool,
+    pub max_rail_usage: AtomicUsize,
 }
