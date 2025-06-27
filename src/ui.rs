@@ -62,6 +62,7 @@ pub fn init() {
                 crate::state::Config::default().perlin_config.seed as u64,
             ),
             create_new_city_next: true,
+            max_rail_usage: 0.into(),
         })
         .insert_resource(SelectedCity::default())
         .add_systems(Update, draw_pointer)
@@ -200,7 +201,7 @@ fn create_path_if_dijkstra_ready(
     meshes: Res<Meshes>,
     custom_materials: Res<Materials>,
 ) {
-    let Some(task) = dijkstra_communication.task else {
+    let Some(_) = dijkstra_communication.task else {
         return;
     };
     let Ok(dijkstra_result) = dijkstra_communication.receiver.try_recv() else {
@@ -214,19 +215,11 @@ fn create_path_if_dijkstra_ready(
     // Clear task to signal Dijkstra is ready for another task.
     dijkstra_communication.task = None;
 
-    let start = task.0;
-    let end = task.1;
-
     let path_mesh = meshes.path.clone();
     let train_mesh = meshes.train.clone();
 
-    // Create a custom color for the path based on start and end points.
-    let r = ((27 * (start.1 + end.1)) % 256) as u8;
-    let g = ((51 * (start.2 + end.2)) % 256) as u8;
-    let b = ((11 * (start.1 + end.2)) % 256) as u8;
-
     let material = materials.add(StandardMaterial {
-        base_color: Color::srgb_u8(r, g, b),
+        base_color: Color::srgb_u8(255, 255, 255),
         perceptual_roughness: 0.0,
         metallic: 0.0,
         ..default()
@@ -283,36 +276,27 @@ fn create_path_if_dijkstra_ready(
                 let rotation =
                     Quat::from_mat3(&Mat3::from_cols(Vec3::cross(dir_norm, up), dir_norm, up));
 
-                train_transforms
-                    .push(Transform::from_translation(mid_point * 1.005).with_rotation(rotation));
-
                 // If this piece of rail already exists, just change its material
                 // corresponding to the current path.
                 // We don't _really_ need this, but this demonstrates how to update
                 // existig rail piece entities.
-                if let Some(rail_info) = state.rails.rails.get(&rail) {
-                    commands
-                        .entity(rail_info.entity)
-                        .insert((MeshMaterial3d(material.clone()),));
-                    continue;
-                }
-                // Otherwise, create a new entity for the rail and store it in the
-                // Rails resource.
-                //
-                // We first create an empty entity in order to already have its ID
-                // which we can key the RailInfo with.
-                //
-                // We'll update it with all the details the same way as we've updated
-                // the existing rail piece above.
-                let entity = commands.spawn_empty().id();
-                state.rails.rails.insert(
-                    rail,
-                    RailInfo {
-                        entity,
-                        // Other details can be added here.
-                    },
-                );
-
+                if let std::collections::hash_map::Entry::Vacant(e) = state.rails.rails.entry(rail) {
+                    // Otherwise, create a new entity for the rail and store it in the
+                    // Rails resource.
+                    //
+                    // We first create an empty entity in order to already have its ID
+                    // which we can key the RailInfo with.
+                    //
+                    // We'll update it with all the details the same way as we've updated
+                    // the existing rail piece above.
+                    let entity = commands.spawn_empty().id();
+                    e.insert(
+                        RailInfo {
+                            entity,
+                            counter: 0.into(),
+                            // Other details can be added here.
+                        },
+                    );
                 commands.entity(entity).insert((
                     Mesh3d(path_mesh.clone()),
                     MeshMaterial3d(material.clone()),
@@ -325,6 +309,13 @@ fn create_path_if_dijkstra_ready(
                     .with_rotation(rotation),
                     PointerInteraction::default(),
                 ));
+                }
+
+                train_transforms.push((
+                    Transform::from_translation(mid_point * 1.005).with_rotation(rotation),
+                    rail,
+                ));
+
             }
         }
     }
@@ -686,11 +677,23 @@ fn highlight_city(
     }
 }
 
-fn move_trains(time: Res<Time>, mut trains: Query<(&mut Train, &mut Transform), With<Train>>) {
+fn move_trains(
+    mut commands: Commands,
+    state: Res<State>,
+    time: Res<Time>,
+    mut trains: Query<(&mut Train, &mut Transform), With<Train>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
     let time_passed_seconds = time.delta().as_secs_f32();
 
     for (mut train, mut transform) in trains.iter_mut() {
-        train.update(&mut transform, time_passed_seconds);
+        train.update(
+            &mut transform,
+            time_passed_seconds,
+            &state,
+            &mut commands,
+            &mut materials,
+        );
     }
 }
 

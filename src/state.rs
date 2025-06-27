@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, RwLock};
 
 use crate::dijkstra::{GlobePoints, GridPoint};
@@ -44,7 +45,7 @@ impl Default for Config {
     }
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy)]
 pub struct Rail {
     pub from: GridPoint,
     pub to: GridPoint,
@@ -52,6 +53,7 @@ pub struct Rail {
 
 pub struct RailInfo {
     pub entity: Entity,
+    pub counter: AtomicUsize,
     // Other details such as how frequently the rail is used can come here.
 }
 
@@ -67,4 +69,5 @@ pub struct State {
     pub rails: Rails,
     pub rng: rand::rngs::StdRng,
     pub create_new_city_next: bool,
+    pub max_rail_usage: AtomicUsize,
 }
