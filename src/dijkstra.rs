@@ -209,7 +209,7 @@ pub fn get_closest_gridpoint(pos: Vec3, grid_size: u32) -> GridPoint {
             5 => "gray",
             _ => unreachable!(),
         };
-        println!("face color: {:?}", color);
+        println!("face color: {color:?}");
     }
 
     let norm_pos = pos * 0.5 / pos[idx];
@@ -228,7 +228,7 @@ pub fn get_closest_gridpoint(pos: Vec3, grid_size: u32) -> GridPoint {
 
     let gridpoint = (face, grid_x, grid_y);
     if cfg!(debug_assertions) {
-        println!("gridpoint: {:?}", gridpoint);
+        println!("gridpoint: {gridpoint:?}");
     }
     gridpoint
 }
