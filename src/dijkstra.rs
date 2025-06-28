@@ -1,7 +1,8 @@
 use bevy::math::{Vec2, Vec3};
 use ordered_float::OrderedFloat;
 use priority_queue::PriorityQueue;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, VecDeque};
+use std::time::Instant;
 
 // face index, row, column
 pub type GridPoint = (u32, u32, u32);
@@ -144,30 +145,38 @@ impl GlobePoints {
     }
 }
 
+#[allow(dead_code)]
 pub fn dijkstra(start: GridPoint, end: GridPoint, globe_points: &GlobePoints) -> Vec<GridPoint> {
+    if start == end {
+        return vec![start];
+    }
+
+    let start_time = Instant::now();
+
     let mut queue = PriorityQueue::new();
-    let mut visited = HashSet::new();
-    let mut dist = HashMap::new();
+    let mut visited = HashMap::new();
     let mut come_from = HashMap::new();
     queue.push(start, OrderedFloat(0.0));
     while let Some((current, current_dist)) = queue.pop() {
-        if visited.contains(&current) {
+        if visited.contains_key(&current) {
             continue;
         }
-        visited.insert(current);
+        visited.insert(current, current_dist);
         if current == end {
             break;
         }
         if let Some(edges) = globe_points.graph.get(&current) {
             for edge in edges {
-                if visited.contains(&edge.to) {
+                if visited.contains_key(&edge.to) {
                     continue;
                 }
-                let new_dist = current_dist - OrderedFloat(edge.cost);
-                if !dist.contains_key(&edge.to) || new_dist > dist[&edge.to] {
-                    dist.insert(edge.to, new_dist);
+                let new_neg_dist = current_dist - OrderedFloat(edge.cost);
+                if queue.get_priority(&edge.to).is_none() {
+                    queue.push(edge.to, new_neg_dist);
                     come_from.insert(edge.to, current);
-                    queue.push(edge.to, new_dist);
+                } else if new_neg_dist > *queue.get_priority(&edge.to).unwrap() {
+                    queue.change_priority(&edge.to, new_neg_dist);
+                    come_from.insert(edge.to, current);
                 }
             }
         }
@@ -182,6 +191,134 @@ pub fn dijkstra(start: GridPoint, end: GridPoint, globe_points: &GlobePoints) ->
         }
         current = prev;
     }
+
+    if cfg!(debug_assertions) {
+        println!(
+            "Path found in {} ms, {} steps",
+            start_time.elapsed().as_millis(),
+            path.len()
+        );
+    }
+
+    path
+}
+
+pub fn bidirectional_dijkstra(
+    start: GridPoint,
+    end: GridPoint,
+    globe_points: &GlobePoints,
+) -> Vec<GridPoint> {
+    if start == end {
+        return vec![start];
+    }
+
+    let start_time = Instant::now();
+
+    #[derive(Hash, PartialEq, Eq, Clone)]
+    struct NodeInfo {
+        node: GridPoint,
+        from_start: bool, // true if this node is from the start side of the search
+        prev: Option<GridPoint>,
+    }
+
+    // Priority queues for both directions,
+    // items are NodeInfo, priority is the distance
+    // Using OrderedFloat to allow for priority queue with f32
+    let mut queue = PriorityQueue::new();
+    let mut visited: HashMap<GridPoint, NodeInfo> = HashMap::new();
+    queue.push(
+        NodeInfo {
+            node: start,
+            from_start: true,
+            prev: None,
+        },
+        OrderedFloat(0.0),
+    );
+
+    queue.push(
+        NodeInfo {
+            node: end,
+            from_start: false,
+            prev: None,
+        },
+        OrderedFloat(0.0),
+    );
+
+    let mut meet_point: Option<GridPoint> = None;
+    let mut meet_point_prev: Option<GridPoint> = None;
+
+    while let Some((current_info, current_dist)) = queue.pop() {
+        let current = current_info.node;
+        if let Some(info) = visited.get(&current) {
+            if info.from_start == current_info.from_start {
+                continue; // Skip if this node is already visited in the same direction
+            } else {
+                // If we have visited this node from the other direction, we can stop
+                meet_point = Some(current);
+                meet_point_prev = current_info.prev;
+                break;
+            }
+        }
+
+        // Mark the node as visited in the opposite direction
+        visited.insert(current, current_info.clone());
+
+        // Process neighbors
+        if let Some(edges) = globe_points.graph.get(&current) {
+            for edge in edges {
+                let neighbor_info = NodeInfo {
+                    node: edge.to,
+                    from_start: current_info.from_start,
+                    prev: Some(current),
+                };
+                let new_neg_dist = current_dist - OrderedFloat(edge.cost);
+                if !visited.contains_key(&edge.to)
+                    || (visited[&edge.to].from_start != current_info.from_start
+                        && new_neg_dist
+                            > *queue
+                                .get_priority(&neighbor_info)
+                                .unwrap_or(&OrderedFloat(f32::NEG_INFINITY)))
+                {
+                    queue.push(neighbor_info, new_neg_dist);
+                }
+            }
+        }
+    }
+
+    let mut path = VecDeque::new();
+    if let Some(meet) = meet_point {
+        let mut current = Some(meet);
+        while current.is_some() {
+            let current_node = current.unwrap();
+            if let Some(info) = visited.get(&current_node) {
+                path.push_front(current_node);
+                current = info.prev;
+            } else {
+                break;
+            }
+        }
+    }
+    if let Some(prev) = meet_point_prev {
+        let mut current = Some(prev);
+        while current.is_some() {
+            let current_node = current.unwrap();
+            if let Some(info) = visited.get(&current_node) {
+                path.push_back(current_node);
+                current = info.prev;
+            } else {
+                break;
+            }
+        }
+    }
+    // path.make_contiguous();
+    let path: Vec<GridPoint> = path.into_iter().collect();
+    // if cfg!(debug_assertions) {
+    println!(
+        "Bidirectional path found in {} ms, {} steps",
+        start_time.elapsed().as_millis(),
+        path.len()
+    );
+    // }
     path
 }
 

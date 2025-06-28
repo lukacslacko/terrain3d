@@ -1,7 +1,9 @@
 use std::sync::{Arc, RwLock};
 use std::thread;
 
-use crate::dijkstra::{GlobePoint, GlobePoints, GridPoint, dijkstra, get_closest_gridpoint};
+use crate::dijkstra::{
+    GlobePoint, GlobePoints, GridPoint, bidirectional_dijkstra, get_closest_gridpoint,
+};
 use crate::meshes_materials::{Materials, Meshes, make_globe};
 use crate::state::{Rail, RailInfo, State};
 use crate::train::{SelectedTrain, Train};
@@ -280,7 +282,8 @@ fn create_path_if_dijkstra_ready(
                 // corresponding to the current path.
                 // We don't _really_ need this, but this demonstrates how to update
                 // existig rail piece entities.
-                if let std::collections::hash_map::Entry::Vacant(e) = state.rails.rails.entry(rail) {
+                if let std::collections::hash_map::Entry::Vacant(e) = state.rails.rails.entry(rail)
+                {
                     // Otherwise, create a new entity for the rail and store it in the
                     // Rails resource.
                     //
@@ -290,32 +293,29 @@ fn create_path_if_dijkstra_ready(
                     // We'll update it with all the details the same way as we've updated
                     // the existing rail piece above.
                     let entity = commands.spawn_empty().id();
-                    e.insert(
-                        RailInfo {
-                            entity,
-                            counter: 0.into(),
-                            // Other details can be added here.
-                        },
-                    );
-                commands.entity(entity).insert((
-                    Mesh3d(path_mesh.clone()),
-                    MeshMaterial3d(material.clone()),
-                    Transform::from_scale(Vec3 {
-                        x: 0.06,
-                        y: length,
-                        z: 0.04,
-                    })
-                    .with_translation(mid_point)
-                    .with_rotation(rotation),
-                    PointerInteraction::default(),
-                ));
+                    e.insert(RailInfo {
+                        entity,
+                        counter: 0.into(),
+                        // Other details can be added here.
+                    });
+                    commands.entity(entity).insert((
+                        Mesh3d(path_mesh.clone()),
+                        MeshMaterial3d(material.clone()),
+                        Transform::from_scale(Vec3 {
+                            x: 0.06,
+                            y: length,
+                            z: 0.04,
+                        })
+                        .with_translation(mid_point)
+                        .with_rotation(rotation),
+                        PointerInteraction::default(),
+                    ));
                 }
 
                 train_transforms.push((
                     Transform::from_translation(mid_point * 1.005).with_rotation(rotation),
                     rail,
                 ));
-
             }
         }
     }
@@ -425,7 +425,7 @@ fn create_path_if_dijkstra_ready(
                     sender.send(None).unwrap();
                     return;
                 };
-                let path = dijkstra(prev_city, target_city, &globe_points);
+                let path = bidirectional_dijkstra(prev_city, target_city, &globe_points);
                 sender.send(Some(path)).unwrap();
             }
         });
@@ -623,7 +623,7 @@ fn on_mouse_left_click(
                                         sender.send(None).unwrap();
                                         return;
                                     };
-                                    let path = dijkstra(start, end, &globe_points);
+                                    let path = bidirectional_dijkstra(start, end, &globe_points);
                                     sender.send(Some(path)).unwrap();
                                 }
                             });
