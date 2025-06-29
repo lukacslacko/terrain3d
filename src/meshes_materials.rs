@@ -124,7 +124,7 @@ pub fn make_globe(config: &crate::state::Config) -> (GlobePoints, Mesh) {
     };
 
     for face in 0..6 {
-        println!("Making face {}", face);
+        println!("Making face {face}");
         for i in 0..m {
             for j in 0..m {
                 let u = i as f32 / grid_size as f32;

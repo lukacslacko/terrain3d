@@ -280,7 +280,8 @@ fn create_path_if_dijkstra_ready(
                 // corresponding to the current path.
                 // We don't _really_ need this, but this demonstrates how to update
                 // existig rail piece entities.
-                if let std::collections::hash_map::Entry::Vacant(e) = state.rails.rails.entry(rail) {
+                if let std::collections::hash_map::Entry::Vacant(e) = state.rails.rails.entry(rail)
+                {
                     // Otherwise, create a new entity for the rail and store it in the
                     // Rails resource.
                     //
@@ -290,32 +291,29 @@ fn create_path_if_dijkstra_ready(
                     // We'll update it with all the details the same way as we've updated
                     // the existing rail piece above.
                     let entity = commands.spawn_empty().id();
-                    e.insert(
-                        RailInfo {
-                            entity,
-                            counter: 0.into(),
-                            // Other details can be added here.
-                        },
-                    );
-                commands.entity(entity).insert((
-                    Mesh3d(path_mesh.clone()),
-                    MeshMaterial3d(material.clone()),
-                    Transform::from_scale(Vec3 {
-                        x: 0.06,
-                        y: length,
-                        z: 0.04,
-                    })
-                    .with_translation(mid_point)
-                    .with_rotation(rotation),
-                    PointerInteraction::default(),
-                ));
+                    e.insert(RailInfo {
+                        entity,
+                        counter: 0.into(),
+                        // Other details can be added here.
+                    });
+                    commands.entity(entity).insert((
+                        Mesh3d(path_mesh.clone()),
+                        MeshMaterial3d(material.clone()),
+                        Transform::from_scale(Vec3 {
+                            x: 0.06,
+                            y: length,
+                            z: 0.04,
+                        })
+                        .with_translation(mid_point)
+                        .with_rotation(rotation),
+                        PointerInteraction::default(),
+                    ));
                 }
 
                 train_transforms.push((
                     Transform::from_translation(mid_point * 1.005).with_rotation(rotation),
                     rail,
                 ));
-
             }
         }
     }
@@ -537,14 +535,14 @@ fn on_mouse_right_click(
         };
         if let Some(&globe_point) = globe_points.points.get(&gridpoint) {
             if globe_point.water {
-                println!("Can't place city on water: {:?}", gridpoint);
+                println!("Can't place city on water: {gridpoint:?}");
                 continue; // Skip water points
             }
 
             if cities.iter().any(|(_, pos)| {
                 (pos.globe_point.pos - globe_point.pos).length() < state.config.min_city_distance
             }) {
-                println!("City already exists near gridpoint: {:?}", gridpoint);
+                println!("City already exists near gridpoint: {gridpoint:?}");
                 continue; // Skip if a city already exists at this point
             }
 
@@ -560,7 +558,7 @@ fn on_mouse_right_click(
                     .looking_at(Vec3::ZERO, Vec3::Z),
             ));
         } else {
-            println!("No GlobePoint found for gridpoint: {:?}", gridpoint);
+            println!("No GlobePoint found for gridpoint: {gridpoint:?}");
         }
     }
 }
@@ -600,12 +598,12 @@ fn on_mouse_left_click(
                     commands
                         .entity(clicked_city)
                         .insert(MeshMaterial3d(materials.selected_city.clone()));
-                    println!("Selected city {:?}", clicked_city);
+                    println!("Selected city {clicked_city:?}");
                 }
                 Some(prev_selected) => {
                     if prev_selected != clicked_city {
                         // Connect the cities
-                        println!("Connecting {:?} and {:?}", prev_selected, clicked_city);
+                        println!("Connecting {prev_selected:?} and {clicked_city:?}");
                         if dijkstra_communication.task.is_some() {
                             println!("Dijkstra is busy, skipping connection.");
                         } else {
