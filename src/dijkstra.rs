@@ -320,13 +320,13 @@ pub fn bidirectional_dijkstra(
     }
 
     let path: Vec<GridPoint> = path.into_iter().collect();
-    // if cfg!(debug_assertions) {
-    println!(
-        "Bidirectional path found in {} ms, {} steps",
-        start_time.elapsed().as_millis(),
-        path.len()
-    );
-    // }
+    if cfg!(debug_assertions) {
+        println!(
+            "Bidirectional path found in {} ms, {} steps",
+            start_time.elapsed().as_millis(),
+            path.len()
+        );
+    }
     path
 }
 
