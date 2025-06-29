@@ -203,6 +203,33 @@ pub fn dijkstra(start: GridPoint, end: GridPoint, globe_points: &GlobePoints) ->
     path
 }
 
+
+#[derive(Hash, PartialEq, Eq, Clone)]
+struct NodeInfo {
+    node: GridPoint,
+    from_start: bool, // true if this node is from the start side of the search
+}
+
+
+#[derive(Hash, PartialEq, Eq, Clone, Debug)]
+struct Priority {
+    dist: OrderedFloat<f32>,
+    prev: Option<GridPoint>,
+}
+
+impl Ord for Priority {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.dist.cmp(&other.dist)
+    }
+}
+
+impl PartialOrd for Priority {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+
 pub fn bidirectional_dijkstra(
     start: GridPoint,
     end: GridPoint,
@@ -214,29 +241,7 @@ pub fn bidirectional_dijkstra(
 
     let start_time = Instant::now();
 
-    #[derive(Hash, PartialEq, Eq, Clone)]
-    struct NodeInfo {
-        node: GridPoint,
-        from_start: bool, // true if this node is from the start side of the search
-    }
 
-    #[derive(Hash, PartialEq, Eq, Clone, Debug)]
-    struct Priority {
-        dist: OrderedFloat<f32>,
-        prev: Option<GridPoint>,
-    }
-
-    impl PartialOrd for Priority {
-        fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-            self.dist.partial_cmp(&other.dist)
-        }
-    }
-
-    impl Ord for Priority {
-        fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-            self.dist.cmp(&other.dist)
-        }
-    }
     // Priority queue for both directions
     let mut queue: PriorityQueue<NodeInfo, Priority> = PriorityQueue::new();
     let mut visited_start: HashMap<GridPoint, Option<GridPoint>> = HashMap::new();
