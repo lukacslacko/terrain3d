@@ -218,50 +218,63 @@ pub fn bidirectional_dijkstra(
     struct NodeInfo {
         node: GridPoint,
         from_start: bool, // true if this node is from the start side of the search
+    }
+
+    #[derive(Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
+    struct Priority {
+        dist: OrderedFloat<f32>,
         prev: Option<GridPoint>,
     }
 
-    // Priority queues for both directions,
-    // items are NodeInfo, priority is the distance
-    // Using OrderedFloat to allow for priority queue with f32
-    let mut queue = PriorityQueue::new();
-    let mut visited: HashMap<GridPoint, NodeInfo> = HashMap::new();
+    // Priority queue for both directions
+    let mut queue: PriorityQueue<NodeInfo, Priority> = PriorityQueue::new();
+    let mut visited_start: HashMap<GridPoint, Option<GridPoint>> = HashMap::new();
+    let mut visited_end: HashMap<GridPoint, Option<GridPoint>> = HashMap::new();
+
     queue.push(
         NodeInfo {
             node: start,
             from_start: true,
+        },
+        Priority {
+            dist: OrderedFloat(0.0),
             prev: None,
         },
-        OrderedFloat(0.0),
     );
-
     queue.push(
         NodeInfo {
             node: end,
             from_start: false,
+        },
+        Priority {
+            dist: OrderedFloat(0.0),
             prev: None,
         },
-        OrderedFloat(0.0),
     );
 
     let mut meet_point: Option<GridPoint> = None;
-    let mut meet_point_prev: Option<GridPoint> = None;
 
-    while let Some((current_info, current_dist)) = queue.pop() {
+    while let Some((current_info, current_prio)) = queue.pop() {
         let current = current_info.node;
-        if let Some(info) = visited.get(&current) {
-            if info.from_start == current_info.from_start {
-                continue; // Skip if this node is already visited in the same direction
-            } else {
-                // If we have visited this node from the other direction, we can stop
-                meet_point = Some(current);
-                meet_point_prev = current_info.prev;
-                break;
-            }
+
+        let this_visited: &mut HashMap<GridPoint, Option<GridPoint>>;
+        let other_visited: &HashMap<GridPoint, Option<GridPoint>>;
+        if current_info.from_start {
+            this_visited = &mut visited_start;
+            other_visited = &visited_end;
+        } else {
+            this_visited = &mut visited_end;
+            other_visited = &visited_start;
         }
 
-        // Mark the node as visited in the opposite direction
-        visited.insert(current, current_info.clone());
+        if this_visited.contains_key(&current) {
+            continue;
+        }
+        this_visited.insert(current, current_prio.prev);
+        if other_visited.contains_key(&current) {
+            meet_point = Some(current);
+            break; // We found a meeting point
+        }
 
         // Process neighbors
         if let Some(edges) = globe_points.graph.get(&current) {
@@ -269,17 +282,14 @@ pub fn bidirectional_dijkstra(
                 let neighbor_info = NodeInfo {
                     node: edge.to,
                     from_start: current_info.from_start,
+                };
+                let new_neg_dist = current_prio.dist - OrderedFloat(edge.cost);
+                let new_prio = Priority {
+                    dist: new_neg_dist,
                     prev: Some(current),
                 };
-                let new_neg_dist = current_dist - OrderedFloat(edge.cost);
-                if !visited.contains_key(&edge.to)
-                    || (visited[&edge.to].from_start != current_info.from_start
-                        && new_neg_dist
-                            > *queue
-                                .get_priority(&neighbor_info)
-                                .unwrap_or(&OrderedFloat(f32::NEG_INFINITY)))
-                {
-                    queue.push(neighbor_info, new_neg_dist);
+                if !this_visited.contains_key(&edge.to) {
+                    queue.push_increase(neighbor_info, new_prio.clone());
                 }
             }
         }
@@ -287,30 +297,28 @@ pub fn bidirectional_dijkstra(
 
     let mut path = VecDeque::new();
     if let Some(meet) = meet_point {
-        let mut current = Some(meet);
-        while current.is_some() {
-            let current_node = current.unwrap();
-            if let Some(info) = visited.get(&current_node) {
-                path.push_front(current_node);
-                current = info.prev;
+        // Reconstruct the path from start to meet point
+        let mut current = meet;
+        while let Some(prev) = visited_start.get(&current) {
+            path.push_front(current);
+            if let Some(p) = prev {
+                current = *p;
             } else {
-                break;
+                break; // Reached the start point
+            }
+        }
+        // Reconstruct the path from end to meet point
+        current = meet;
+        while let Some(prev) = visited_end.get(&current) {
+            if let Some(p) = prev {
+                path.push_back(*p);
+                current = *p;
+            } else {
+                break; // Reached the end point
             }
         }
     }
-    if let Some(prev) = meet_point_prev {
-        let mut current = Some(prev);
-        while current.is_some() {
-            let current_node = current.unwrap();
-            if let Some(info) = visited.get(&current_node) {
-                path.push_back(current_node);
-                current = info.prev;
-            } else {
-                break;
-            }
-        }
-    }
-    // path.make_contiguous();
+
     let path: Vec<GridPoint> = path.into_iter().collect();
     // if cfg!(debug_assertions) {
     println!(
