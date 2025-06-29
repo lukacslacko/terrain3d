@@ -1,7 +1,9 @@
 use std::sync::{Arc, RwLock};
 use std::thread;
 
-use crate::dijkstra::{GlobePoint, GlobePoints, GridPoint, dijkstra, get_closest_gridpoint};
+use crate::dijkstra::{
+    GlobePoint, GlobePoints, GridPoint, bidirectional_dijkstra, get_closest_gridpoint,
+};
 use crate::meshes_materials::{Materials, Meshes, make_globe};
 use crate::state::{Rail, RailInfo, State};
 use crate::train::{SelectedTrain, Train};
@@ -423,7 +425,7 @@ fn create_path_if_dijkstra_ready(
                     sender.send(None).unwrap();
                     return;
                 };
-                let path = dijkstra(prev_city, target_city, &globe_points);
+                let path = bidirectional_dijkstra(prev_city, target_city, &globe_points);
                 sender.send(Some(path)).unwrap();
             }
         });
@@ -621,7 +623,7 @@ fn on_mouse_left_click(
                                         sender.send(None).unwrap();
                                         return;
                                     };
-                                    let path = dijkstra(start, end, &globe_points);
+                                    let path = bidirectional_dijkstra(start, end, &globe_points);
                                     sender.send(Some(path)).unwrap();
                                 }
                             });

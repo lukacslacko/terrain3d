@@ -8,3 +8,6 @@ mod ui;
 fn main() {
     ui::init();
 }
+
+#[cfg(test)]
+mod test;
