@@ -220,12 +220,23 @@ pub fn bidirectional_dijkstra(
         from_start: bool, // true if this node is from the start side of the search
     }
 
-    #[derive(Hash, PartialEq, Eq, PartialOrd, Ord, Clone, Debug)]
+    #[derive(Hash, PartialEq, Eq, Clone, Debug)]
     struct Priority {
         dist: OrderedFloat<f32>,
         prev: Option<GridPoint>,
     }
 
+    impl PartialOrd for Priority {
+        fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+            self.dist.partial_cmp(&other.dist)
+        }
+    }
+
+    impl Ord for Priority {
+        fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+            self.dist.cmp(&other.dist)
+        }
+    }
     // Priority queue for both directions
     let mut queue: PriorityQueue<NodeInfo, Priority> = PriorityQueue::new();
     let mut visited_start: HashMap<GridPoint, Option<GridPoint>> = HashMap::new();
