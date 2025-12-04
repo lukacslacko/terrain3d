@@ -40,7 +40,7 @@ impl Default for Config {
             min_city_distance: 1.0,
             reduction_factor: 2.0, // default reduction factor
             climbing_cost: 5.0,
-            num_automatic_trains: 250,
+            num_automatic_trains: 0,
         }
     }
 }
