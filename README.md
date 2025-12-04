@@ -1,10 +1,18 @@
 # terrain3d
 
+- Run with `cargo run -r`. Startup takes a bit of time, see the progress report in the console.
+- Drag with left mouse button to rotate the Earth.
+- Scroll with the mouse to zoom in and out.
+- Right click to create a city.
+- Left click one city then another to connect them.
+- Left click a train to ride it.
+- Press Esc to get off a train.
+
 ## Profiling
 
-To profile, do `cargo install flamegraph`, then run with `cargo flamegraph` 
-as admin, eg in windows by searching for `cmd`, right clicking on 
-`Command Prompt` and selecting `Run as administrator`. 
+To profile, do `cargo install flamegraph`, then run with `cargo flamegraph`
+as admin, eg in windows by searching for `cmd`, right clicking on
+`Command Prompt` and selecting `Run as administrator`.
 Finally, open the result flamegraph.svg in a browser.
 
 ## WebAssembly (WASM) Build & Deployment
@@ -22,7 +30,7 @@ To build the Bevy app for WebAssembly and output to the `docs/` directory (for l
   build-wasm.bat
   ```
 
-The output will be in the `docs/` directory. You can serve this directory locally with 
+The output will be in the `docs/` directory. You can serve this directory locally with
 ```
 trunk serve --release --filehash=false --dist docs
 ```
