@@ -156,10 +156,21 @@ fn startup(
 ) {
     let (tx, rx) = bounded(1);
     let config_for_make_globe = state.config.clone();
-    thread::spawn(move || {
+    
+    // WASM does not support threads ¯\_(ツ)_/¯.
+    #[cfg(target_arch = "wasm32")]
+    {
         let (globe_points, globe_mesh) = make_globe(&config_for_make_globe);
         tx.send((globe_points, globe_mesh)).unwrap();
-    });
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        thread::spawn(move || {
+            let (globe_points, globe_mesh) = make_globe(&config_for_make_globe);
+            tx.send((globe_points, globe_mesh)).unwrap();
+        });
+    }
 
     commands.insert_resource(GlobeReceiver { receiver: rx });
 
