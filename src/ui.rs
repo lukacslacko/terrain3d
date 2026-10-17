@@ -1,5 +1,4 @@
 use std::sync::{Arc, RwLock};
-use std::thread;
 
 use crate::dijkstra::{
     GlobePoint, GlobePoints, GridPoint, bidirectional_dijkstra, get_closest_gridpoint,
@@ -112,6 +111,15 @@ struct DijkstraCommunication {
     task: Option<(GridPoint, GridPoint)>,
 }
 
+/// Runs `f` on a new thread. Threads are not available on the web, so there `f`
+/// runs right away on the main thread instead.
+fn spawn_background(f: impl FnOnce() + Send + 'static) {
+    #[cfg(not(target_arch = "wasm32"))]
+    std::thread::spawn(f);
+    #[cfg(target_arch = "wasm32")]
+    f();
+}
+
 type CameraTransformQuery<'w, 's> =
     Query<'w, 's, &'static mut Transform, (With<MainCamera>, Without<Train>)>;
 type LightsTransformQuery<'w, 's> =
@@ -156,7 +164,7 @@ fn startup(
 ) {
     let (tx, rx) = bounded(1);
     let config_for_make_globe = state.config.clone();
-    thread::spawn(move || {
+    spawn_background(move || {
         let (globe_points, globe_mesh) = make_globe(&config_for_make_globe);
         tx.send((globe_points, globe_mesh)).unwrap();
     });
@@ -415,10 +423,12 @@ fn create_path_if_dijkstra_ready(
             panic!("No target city found, skipping train creation.");
         };
 
+        // Release the write lock, the background task needs to read the globe points.
+        drop(globe_points);
         let globe_points_lock = Arc::clone(&state.globe_points);
         let sender = dijkstra_communication.sender.clone();
         dijkstra_communication.task = Some((prev_city, target_city));
-        thread::spawn({
+        spawn_background({
             move || {
                 let Ok(globe_points) = globe_points_lock.read() else {
                     println!("Failed to lock globe points. This should never happen.");
@@ -614,7 +624,7 @@ fn on_mouse_left_click(
                             let start = cities.get(prev_selected).unwrap().1.gridpoint;
                             let end = cities.get(clicked_city).unwrap().1.gridpoint;
                             dijkstra_communication.task = Some((start, end));
-                            thread::spawn({
+                            spawn_background({
                                 move || {
                                     let Ok(globe_points) = globe_points_lock.read() else {
                                         println!(
