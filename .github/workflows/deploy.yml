@@ -1,22 +1,26 @@
 name: Deploy to GitHub Pages
 
 on:
-  # Change to manual execution to test it, it's broken now :( see issue #22
+  # Manual for now; enable the push trigger once a manual run has deployed.
   # push:
   #  branches: [main]
   workflow_dispatch:
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
+  pages: write
+  id-token: write
+
+# Don't let a newer run cancel a deployment that is already in progress.
+concurrency:
+  group: pages
+  cancel-in-progress: false
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
 
       - name: Install Rust
         uses: actions-rs/toolchain@v1
@@ -35,45 +39,23 @@ jobs:
         run: rustup target add wasm32-unknown-unknown
 
       - name: Build (WASM)
-        run: trunk build --release --public-url /terrain3d/ --filehash false --dist docs
+        run: trunk build --release --public-url /terrain3d/ --filehash false --dist dist
 
       - name: Optimize WASM
-        run: wasm-opt -Oz -o docs/terrain3d_bg.wasm docs/terrain3d_bg.wasm
+        run: wasm-opt -Oz -o dist/terrain3d_bg.wasm dist/terrain3d_bg.wasm
 
-      - name: Configure Git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: dist
 
-      - name: Create update branch
-        id: create_branch
-        run: |
-          BRANCH="pages-update-$(date +'%Y%m%d%H%M%S')"
-          git checkout -b $BRANCH
-          git add docs/
-          git commit -m "Update GitHub Pages build [skip ci]" || echo "No changes to commit"
-          git push "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" HEAD:$BRANCH
-          echo "branch_name=$BRANCH" >> $GITHUB_OUTPUT
-
-      - name: Create Pull Request
-        id: create_pr
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
-        run: |
-          PR_URL=$(gh pr create --title "Update GitHub Pages build" \
-            --body "Automated update from CI" \
-            --base main \
-            --head ${{ steps.create_branch.outputs.branch_name }} \
-            --repo ${{ github.repository }} \
-            --fill)
-          echo "pr_url=$PR_URL" >> $GITHUB_OUTPUT
-
-      - name: Merge Pull Request
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_PAT }}
-        run: |
-          # Get PR number from the URL
-          PR_NUMBER=$(basename ${{ steps.create_pr.outputs.pr_url }})
-          
-          # Try merging the PR
-          gh pr merge $PR_NUMBER --merge --delete-branch --repo ${{ github.repository }}
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

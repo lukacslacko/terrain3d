@@ -19,7 +19,7 @@ Finally, open the result flamegraph.svg in a browser.
 
 ### Local WASM Build
 
-To build the Bevy app for WebAssembly and output to the `docs/` directory (for local testing or manual deployment):
+To build the Bevy app for WebAssembly and output to the `dist/` directory (for local testing):
 
 - On Linux/macOS:
   ```sh
@@ -30,17 +30,17 @@ To build the Bevy app for WebAssembly and output to the `docs/` directory (for l
   build-wasm.bat
   ```
 
-The output will be in the `docs/` directory. You can serve this directory locally with
+The output will be in the `dist/` directory, which is not checked in. To test the WASM build
+locally, run
 ```
-trunk serve --release --filehash=false --dist docs
+trunk serve --release --filehash=false
 ```
-to test the WASM build.
 
-### Automatic Deployment (GitHub Actions)
+### Deployment (GitHub Actions)
 
-On every push to the `main` branch, a GitHub Actions workflow automatically:
-- Builds the WASM app using Trunk
-- Outputs the result to the `docs/` directory
-- Commits and pushes any changes in `docs/` back to the repository
+The `Deploy to GitHub Pages` workflow is started manually from the Actions tab. It:
+- Builds the WASM app using Trunk and optimizes it with `wasm-opt`
+- Uploads the `dist/` directory as a Pages artifact and deploys it
 
-You can configure GitHub Pages to serve from the `/docs` folder on the `main` branch for automatic deployment.
+The build output is never committed. For this to work, GitHub Pages must be set to deploy
+from GitHub Actions: Settings → Pages → Build and deployment → Source: "GitHub Actions".
