@@ -1,57 +1,83 @@
-name: Deploy to GitHub Pages
+name: WASM build and deploy
 
 on:
-  # Manual for now; enable the push trigger once a manual run has deployed.
-  # push:
-  #  branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "index.html"
+      - ".cargo/**"
+      - ".github/workflows/deploy.yml"
+  # Build (but don't deploy) on PRs, to catch a broken web build before merging.
+  pull_request:
+    paths:
+      - "src/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "index.html"
+      - ".cargo/**"
+      - ".github/workflows/deploy.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
-# Don't let a newer run cancel a deployment that is already in progress.
+# Cancel superseded PR builds, but never a deployment in progress.
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  TRUNK_VERSION: v0.21.14
+  BINARYEN_VERSION: version_133
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v7
 
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          target: wasm32-unknown-unknown
-          override: true
+          targets: wasm32-unknown-unknown
 
-      - name: Install Trunk
-        run: cargo install trunk
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
 
-      - name: Install wasm-opt
-        run: cargo install wasm-opt
-
-      - name: Add WASM target
-        run: rustup target add wasm32-unknown-unknown
+      - name: Install Trunk and wasm-opt
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -sSfL "https://github.com/trunk-rs/trunk/releases/download/$TRUNK_VERSION/trunk-x86_64-unknown-linux-gnu.tar.gz" \
+            | tar xz -C "$HOME/.local/bin"
+          curl -sSfL "https://github.com/WebAssembly/binaryen/releases/download/$BINARYEN_VERSION/binaryen-$BINARYEN_VERSION-x86_64-linux.tar.gz" \
+            | tar xz -C "$HOME/.local/bin" --strip-components=2 "binaryen-$BINARYEN_VERSION/bin/wasm-opt"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Build (WASM)
+        # wasm-opt strips the debug info anyway, so skip building it.
+        env:
+          CARGO_PROFILE_RELEASE_DEBUG: "false"
         run: trunk build --release --public-url /terrain3d/ --filehash false --dist dist
 
       - name: Optimize WASM
         run: wasm-opt -Oz -o dist/terrain3d_bg.wasm dist/terrain3d_bg.wasm
 
       - name: Upload Pages artifact
+        if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v5
         with:
           path: dist
 
   deploy:
+    if: github.event_name != 'pull_request'
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

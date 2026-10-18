@@ -63,9 +63,12 @@ trunk serve --release --filehash=false
 
 #### Deployment (GitHub Actions)
 
-The `Deploy to GitHub Pages` workflow is started manually from the Actions tab. It:
+The `WASM build and deploy` workflow runs on every push to `main` that changes the app's
+code or build setup, and can also be started manually from the Actions tab. It:
 - Builds the WASM app using Trunk and optimizes it with `wasm-opt`
 - Uploads the `dist/` directory as a Pages artifact and deploys it
+
+On pull requests it only builds the WASM app, so a broken web build shows up before merging.
 
 The build output is never committed. For this to work, GitHub Pages must be set to deploy
 from GitHub Actions: Settings → Pages → Build and deployment → Source: "GitHub Actions".
