@@ -1,5 +1,4 @@
 use std::sync::{Arc, RwLock};
-use std::thread;
 
 use crate::dijkstra::{
     GlobePoint, GlobePoints, GridPoint, bidirectional_dijkstra, get_closest_gridpoint,
@@ -112,6 +111,15 @@ struct DijkstraCommunication {
     task: Option<(GridPoint, GridPoint)>,
 }
 
+/// Runs `f` on a new thread. Threads are not available on the web, so there `f`
+/// runs right away on the main thread instead.
+fn spawn_background(f: impl FnOnce() + Send + 'static) {
+    #[cfg(not(target_arch = "wasm32"))]
+    std::thread::spawn(f);
+    #[cfg(target_arch = "wasm32")]
+    f();
+}
+
 type CameraTransformQuery<'w, 's> =
     Query<'w, 's, &'static mut Transform, (With<MainCamera>, Without<Train>)>;
 type LightsTransformQuery<'w, 's> =
@@ -156,7 +164,7 @@ fn startup(
 ) {
     let (tx, rx) = bounded(1);
     let config_for_make_globe = state.config.clone();
-    thread::spawn(move || {
+    spawn_background(move || {
         let (globe_points, globe_mesh) = make_globe(&config_for_make_globe);
         tx.send((globe_points, globe_mesh)).unwrap();
     });
@@ -261,62 +269,61 @@ fn create_path_if_dijkstra_ready(
 
     for line in path.windows(2) {
         let (from, to) = (line[0], line[1]);
-        if let Some(from_point) = globe_points.points.get(&from) {
-            if let Some(to_point) = globe_points.points.get(&to) {
-                let rail = Rail {
-                    from: from.min(to),
-                    to: from.max(to),
-                };
+        if let Some(from_point) = globe_points.points.get(&from)
+            && let Some(to_point) = globe_points.points.get(&to)
+        {
+            let rail = Rail {
+                from: from.min(to),
+                to: from.max(to),
+            };
 
-                // compute the transform of both the path segment and train
-                let direction = to_point.pos - from_point.pos;
-                let length = direction.length();
-                let mid_point = (from_point.pos + to_point.pos) / 2.0;
+            // compute the transform of both the path segment and train
+            let direction = to_point.pos - from_point.pos;
+            let length = direction.length();
+            let mid_point = (from_point.pos + to_point.pos) / 2.0;
 
-                let dir_norm = direction.normalize();
-                let up = Vec3::cross(Vec3::cross(dir_norm, mid_point.normalize()), dir_norm);
-                let rotation =
-                    Quat::from_mat3(&Mat3::from_cols(Vec3::cross(dir_norm, up), dir_norm, up));
+            let dir_norm = direction.normalize();
+            let up = Vec3::cross(Vec3::cross(dir_norm, mid_point.normalize()), dir_norm);
+            let rotation =
+                Quat::from_mat3(&Mat3::from_cols(Vec3::cross(dir_norm, up), dir_norm, up));
 
-                // If this piece of rail already exists, just change its material
-                // corresponding to the current path.
-                // We don't _really_ need this, but this demonstrates how to update
-                // existig rail piece entities.
-                if let std::collections::hash_map::Entry::Vacant(e) = state.rails.rails.entry(rail)
-                {
-                    // Otherwise, create a new entity for the rail and store it in the
-                    // Rails resource.
-                    //
-                    // We first create an empty entity in order to already have its ID
-                    // which we can key the RailInfo with.
-                    //
-                    // We'll update it with all the details the same way as we've updated
-                    // the existing rail piece above.
-                    let entity = commands.spawn_empty().id();
-                    e.insert(RailInfo {
-                        entity,
-                        counter: 0.into(),
-                        // Other details can be added here.
-                    });
-                    commands.entity(entity).insert((
-                        Mesh3d(path_mesh.clone()),
-                        MeshMaterial3d(material.clone()),
-                        Transform::from_scale(Vec3 {
-                            x: 0.06,
-                            y: length,
-                            z: 0.04,
-                        })
-                        .with_translation(mid_point)
-                        .with_rotation(rotation),
-                        PointerInteraction::default(),
-                    ));
-                }
-
-                train_transforms.push((
-                    Transform::from_translation(mid_point * 1.005).with_rotation(rotation),
-                    rail,
+            // If this piece of rail already exists, just change its material
+            // corresponding to the current path.
+            // We don't _really_ need this, but this demonstrates how to update
+            // existig rail piece entities.
+            if let std::collections::hash_map::Entry::Vacant(e) = state.rails.rails.entry(rail) {
+                // Otherwise, create a new entity for the rail and store it in the
+                // Rails resource.
+                //
+                // We first create an empty entity in order to already have its ID
+                // which we can key the RailInfo with.
+                //
+                // We'll update it with all the details the same way as we've updated
+                // the existing rail piece above.
+                let entity = commands.spawn_empty().id();
+                e.insert(RailInfo {
+                    entity,
+                    counter: 0.into(),
+                    // Other details can be added here.
+                });
+                commands.entity(entity).insert((
+                    Mesh3d(path_mesh.clone()),
+                    MeshMaterial3d(material.clone()),
+                    Transform::from_scale(Vec3 {
+                        x: 0.06,
+                        y: length,
+                        z: 0.04,
+                    })
+                    .with_translation(mid_point)
+                    .with_rotation(rotation),
+                    PointerInteraction::default(),
                 ));
             }
+
+            train_transforms.push((
+                Transform::from_translation(mid_point * 1.005).with_rotation(rotation),
+                rail,
+            ));
         }
     }
 
@@ -415,10 +422,12 @@ fn create_path_if_dijkstra_ready(
             panic!("No target city found, skipping train creation.");
         };
 
+        // Release the write lock, the background task needs to read the globe points.
+        drop(globe_points);
         let globe_points_lock = Arc::clone(&state.globe_points);
         let sender = dijkstra_communication.sender.clone();
         dijkstra_communication.task = Some((prev_city, target_city));
-        thread::spawn({
+        spawn_background({
             move || {
                 let Ok(globe_points) = globe_points_lock.read() else {
                     println!("Failed to lock globe points. This should never happen.");
@@ -614,7 +623,7 @@ fn on_mouse_left_click(
                             let start = cities.get(prev_selected).unwrap().1.gridpoint;
                             let end = cities.get(clicked_city).unwrap().1.gridpoint;
                             dijkstra_communication.task = Some((start, end));
-                            thread::spawn({
+                            spawn_background({
                                 move || {
                                     let Ok(globe_points) = globe_points_lock.read() else {
                                         println!(
@@ -720,10 +729,10 @@ fn update_train_camera(
     mut camera_transform_q: Query<&mut Transform, (With<MainCamera>, Without<Train>)>,
     trains_q: Query<(&Train, &Transform, &SelectedTrain), With<Train>>,
 ) {
-    if let Ok((train, train_transform, _)) = trains_q.single() {
-        if let Ok(mut camera_transform) = camera_transform_q.single_mut() {
-            move_camera_to_train(&mut camera_transform, train_transform, train.forward);
-        }
+    if let Ok((train, train_transform, _)) = trains_q.single()
+        && let Ok(mut camera_transform) = camera_transform_q.single_mut()
+    {
+        move_camera_to_train(&mut camera_transform, train_transform, train.forward);
     }
 }
 

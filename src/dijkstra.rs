@@ -1,8 +1,8 @@
 use bevy::math::{Vec2, Vec3};
+use bevy::platform::time::Instant;
 use ordered_float::OrderedFloat;
 use priority_queue::PriorityQueue;
 use std::collections::{HashMap, VecDeque};
-use std::time::Instant;
 
 // face index, row, column
 pub type GridPoint = (u32, u32, u32);
