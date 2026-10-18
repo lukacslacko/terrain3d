@@ -241,26 +241,9 @@ fn create_path_if_dijkstra_ready(
         return;
     };
 
-    let reduction_factor = state.config.reduction_factor;
     // Apply cost reduction to edges in the path (only once per edge)
     for w in path.windows(2) {
-        let (from, to) = (w[1], w[0]);
-        if let Some(edges) = globe_points.graph.get_mut(&from) {
-            for edge in edges.iter_mut() {
-                if edge.to == to && !edge.discounted {
-                    edge.cost /= reduction_factor;
-                    edge.discounted = true;
-                }
-            }
-        }
-        if let Some(edges) = globe_points.graph.get_mut(&to) {
-            for edge in edges.iter_mut() {
-                if edge.to == from && !edge.discounted {
-                    edge.cost /= reduction_factor;
-                    edge.discounted = true;
-                }
-            }
-        }
+        globe_points.discount_edge(w[0], w[1]);
     }
 
     println!("Dijkstra done, path length: {}", path.len());

@@ -69,7 +69,12 @@ pub fn make_globe(config: &crate::state::Config) -> (GlobePoints, Mesh) {
     let mut normals = Vec::new();
     let mut indices = Vec::new();
 
-    let mut globe_points = GlobePoints::default();
+    let mut globe_points = GlobePoints {
+        grid_size: config.grid_size,
+        climbing_cost: config.climbing_cost,
+        reduction_factor: config.reduction_factor,
+        ..default()
+    };
     let grid_size = config.grid_size;
     let m = grid_size + 1;
     let sea_level = config.sea_level;
@@ -200,9 +205,6 @@ pub fn make_globe(config: &crate::state::Config) -> (GlobePoints, Mesh) {
             }
         }
     }
-
-    println!("Building graph.");
-    globe_points.build_graph(grid_size, config.climbing_cost);
 
     println!("Making mesh.");
     let mut mesh = Mesh::new(
