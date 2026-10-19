@@ -480,23 +480,66 @@ fn look_around_on_drag(
     }
 }
 
+/// Roughly how many logical pixels browsers scroll per mouse wheel notch.
+const PIXELS_PER_SCROLL_LINE: f32 = 100.0;
+
 fn zoom_with_scroll(
     mut scroll_evr: EventReader<MouseWheel>,
+    windows: Query<&Window>,
     mut camera_transform: Query<(&mut Transform, &MainCamera)>,
     mut lights_transform: Query<(&mut Transform, &PointLight), Without<MainCamera>>,
 ) {
-    let scroll: f32 = scroll_evr.read().map(|e| e.y).sum();
+    // Native mouse wheels report lines, but browsers (and touchpads) report physical pixels,
+    // so convert pixels to lines to get the same zoom speed everywhere.
+    let scroll: f32 = scroll_evr
+        .read()
+        .map(|e| match e.unit {
+            MouseScrollUnit::Line => e.y,
+            MouseScrollUnit::Pixel => {
+                let scale_factor = windows.get(e.window).map_or(1.0, |w| w.scale_factor());
+                e.y / scale_factor / PIXELS_PER_SCROLL_LINE
+            }
+        })
+        .sum();
     if scroll == 0.0 {
         return;
     }
 
     let (mut transform, _cam) = camera_transform.single_mut().unwrap();
-    let motion = transform.forward().normalize() * scroll * 0.5;
-    transform.translation += motion;
+    let step = scroll * 0.5;
+    let direction = transform.forward().as_vec3() * step.signum();
+    let step = step
+        .abs()
+        .min(max_step_toward_globe(transform.translation, direction));
+    transform.translation += direction * step;
 
     for mut light_transform in lights_transform.iter_mut() {
         adjust_light(light_transform.0.as_mut(), transform.as_mut());
     }
+}
+
+/// The camera can't zoom closer than this to the globe's center (the highest peaks are at ~5.5).
+const MIN_CAMERA_DISTANCE: f32 = 6.0;
+
+/// How far the camera can move from `position` along the unit vector `direction` before it gets
+/// closer than `MIN_CAMERA_DISTANCE` to the globe's center.
+fn max_step_toward_globe(position: Vec3, direction: Vec3) -> f32 {
+    let b = position.dot(direction);
+    if b >= 0.0 {
+        // Moving away from the center.
+        return f32::INFINITY;
+    }
+    let c = position.length_squared() - MIN_CAMERA_DISTANCE * MIN_CAMERA_DISTANCE;
+    if c <= 0.0 {
+        // Already too close.
+        return 0.0;
+    }
+    // Smallest t >= 0 with |position + t * direction| = MIN_CAMERA_DISTANCE, if there is one.
+    let discriminant = b * b - c;
+    if discriminant < 0.0 {
+        return f32::INFINITY;
+    }
+    -b - discriminant.sqrt()
 }
 
 fn draw_pointer(pointers: Query<&PointerInteraction>, mut gizmos: Gizmos) {
