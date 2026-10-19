@@ -4,19 +4,21 @@ use crate::dijkstra::{
     GlobePoint, GlobePoints, GridPoint, bidirectional_dijkstra, get_closest_gridpoint,
 };
 use crate::meshes_materials::{Materials, Meshes, make_globe};
-use crate::state::{Rail, RailInfo, State};
+use crate::state::{Config, Rail, RailInfo, State};
 use crate::train::{SelectedTrain, Train};
 
 use bevy::{
     color::palettes::tailwind::*,
+    ecs::system::SystemParam,
     input::{common_conditions::*, mouse::*},
     picking::pointer::PointerInteraction,
     prelude::*,
     render::mesh::{Mesh, Mesh3d},
+    ui::UiSystem,
     window::WindowResolution,
 };
 use crossbeam_channel::{Receiver, Sender, bounded};
-use rand::{Rng, SeedableRng};
+use rand::Rng;
 
 pub fn init() {
     App::new()
@@ -30,7 +32,32 @@ pub fn init() {
             }),
             MeshPickingPlugin,
         ))
-        .add_systems(Startup, startup)
+        .add_systems(
+            Startup,
+            (startup, spawn_menu, spawn_generating_planet_label),
+        )
+        .add_systems(
+            Update,
+            (
+                toggle_menu.run_if(button_pressed(ButtonAction::ToggleMenu)),
+                close_menu.run_if(
+                    input_just_pressed(MouseButton::Left)
+                        .and(not(button_pressed(ButtonAction::ToggleMenu))),
+                ),
+                show_usage_hints.run_if(button_pressed(ButtonAction::ShowUsageHints)),
+                hide_usage_hints.run_if(button_pressed(ButtonAction::HideUsageHints)),
+                highlight_hovered_buttons,
+                show_generating_planet_label,
+            ),
+        )
+        // In `PreUpdate`, so that its commands are applied before `Update`, whose systems would
+        // otherwise still see the old planet's entities, after `State` is already the new one's.
+        .add_systems(
+            PreUpdate,
+            new_planet
+                .run_if(button_pressed(ButtonAction::NewPlanet))
+                .after(UiSystem::Focus),
+        )
         .add_systems(
             FixedUpdate,
             rotate_on_drag.run_if(input_pressed(MouseButton::Left)),
@@ -55,16 +82,7 @@ pub fn init() {
         )
         .add_systems(Update, create_path_if_dijkstra_ready)
         .add_systems(Update, highlight_city)
-        .insert_resource(State {
-            config: crate::state::Config::default(),
-            globe_points: Arc::new(RwLock::new(GlobePoints::default())),
-            rails: crate::state::Rails::default(),
-            rng: rand::rngs::StdRng::seed_from_u64(
-                crate::state::Config::default().perlin_config.seed as u64,
-            ),
-            create_new_city_next: true,
-            max_rail_usage: 0.into(),
-        })
+        .insert_resource(State::new(Config::default()))
         .insert_resource(SelectedCity::default())
         .add_systems(Update, draw_pointer)
         .add_systems(Update, try_getting_globe)
@@ -109,6 +127,17 @@ struct DijkstraCommunication {
     sender: Sender<Option<Vec<GridPoint>>>,
     receiver: Receiver<Option<Vec<GridPoint>>>,
     task: Option<(GridPoint, GridPoint)>,
+}
+
+impl DijkstraCommunication {
+    fn new() -> Self {
+        let (sender, receiver) = bounded(1);
+        Self {
+            sender,
+            receiver,
+            task: None,
+        }
+    }
 }
 
 /// Runs `f` on a new thread. Threads are not available on the web, so there `f`
@@ -156,27 +185,33 @@ fn try_getting_globe(
     }
 }
 
+/// Generates the globe for `config`, for `try_getting_globe` to pick up.
+fn start_generating_globe(commands: &mut Commands, config: &Config) {
+    let (tx, rx) = bounded(1);
+    let config_for_make_globe = config.clone();
+    spawn_background(move || {
+        let (globe_points, globe_mesh) = make_globe(&config_for_make_globe);
+        // Fails if another planet was requested in the meantime. This one isn't needed then.
+        tx.send((globe_points, globe_mesh)).ok();
+    });
+
+    commands.insert_resource(GlobeReceiver { receiver: rx });
+}
+
+fn camera_start_transform() -> Transform {
+    Transform::from_xyz(0.0, 0.0, 15.0).looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Z)
+}
+
+const LIGHT_START_POSITION: Vec3 = Vec3::new(-15.0, 0.0, 25.0);
+
 fn startup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     state: Res<State>,
 ) {
-    let (tx, rx) = bounded(1);
-    let config_for_make_globe = state.config.clone();
-    spawn_background(move || {
-        let (globe_points, globe_mesh) = make_globe(&config_for_make_globe);
-        tx.send((globe_points, globe_mesh)).unwrap();
-    });
-
-    commands.insert_resource(GlobeReceiver { receiver: rx });
-
-    let (dijkstra_tx, dijkstra_rx) = bounded(1);
-    commands.insert_resource(DijkstraCommunication {
-        sender: dijkstra_tx,
-        receiver: dijkstra_rx,
-        task: None,
-    });
+    start_generating_globe(&mut commands, &state.config);
+    commands.insert_resource(DijkstraCommunication::new());
 
     commands.insert_resource(Meshes::new(&mut meshes));
     commands.insert_resource(Materials::new(&mut materials));
@@ -188,7 +223,7 @@ fn startup(
             // shadow_depth_bias: 0.2,
             ..default()
         },
-        Transform::from_xyz(-15.0, 0.0, 25.0),
+        Transform::from_translation(LIGHT_START_POSITION),
     ));
 
     commands.spawn((
@@ -198,8 +233,286 @@ fn startup(
             ..default()
         }),
         MainCamera,
-        Transform::from_xyz(0.0, 0.0, 15.0).looking_at(Vec3::new(0.0, 0.0, 0.0), Vec3::Z),
+        camera_start_transform(),
     ));
+}
+
+const USAGE_HINTS: &str = "\
+Left drag: rotate the planet
+Scroll: zoom in and out
+Right click: create a city
+Left click two cities: connect them
+Left click a train: ride it
+Esc: get off the train";
+
+const PANEL_COLOR: Color = Color::srgba(0.0, 0.0, 0.0, 0.5);
+const MENU_COLOR: Color = Color::srgb(0.25, 0.25, 0.25);
+const HOVERED_BUTTON_COLOR: Color = Color::srgba(1.0, 1.0, 1.0, 0.15);
+
+/// What a button does when pressed.
+#[derive(Component, Clone, Copy, PartialEq, Eq)]
+enum ButtonAction {
+    ToggleMenu,
+    ShowUsageHints,
+    HideUsageHints,
+    NewPlanet,
+}
+
+/// The menu that opens from the hamburger button.
+#[derive(Component)]
+struct Menu;
+
+#[derive(Component)]
+struct UsageHints;
+
+#[derive(Component)]
+struct GeneratingPlanetLabel;
+
+/// A run condition that is true when a button with `action` was just pressed.
+fn button_pressed(
+    action: ButtonAction,
+) -> impl FnMut(Query<(&Interaction, &ButtonAction), Changed<Interaction>>) -> bool + Clone {
+    move |buttons| {
+        buttons.iter().any(|(interaction, button_action)| {
+            *interaction == Interaction::Pressed && *button_action == action
+        })
+    }
+}
+
+fn label(text: &'static str, font_size: f32) -> impl Bundle {
+    (
+        Text::new(text),
+        TextFont {
+            font_size,
+            ..default()
+        },
+    )
+}
+
+fn menu_item(action: ButtonAction, text: &'static str) -> impl Bundle {
+    (
+        action,
+        Button,
+        Node {
+            padding: UiRect::axes(Val::Px(12.0), Val::Px(6.0)),
+            ..default()
+        },
+        BackgroundColor(Color::NONE),
+        children![label(text, 14.0)],
+    )
+}
+
+/// Spawns the hamburger button, the menu it opens, and the usage hints, which are open at the
+/// start.
+fn spawn_menu(mut commands: Commands) {
+    let hamburger_bar = || {
+        (
+            Node {
+                width: Val::Px(16.0),
+                height: Val::Px(2.0),
+                ..default()
+            },
+            BackgroundColor(Color::WHITE),
+        )
+    };
+    commands.spawn((
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(8.0),
+            left: Val::Px(8.0),
+            ..default()
+        },
+        BackgroundColor(PANEL_COLOR),
+        BorderRadius::all(Val::Px(4.0)),
+        children![(
+            ButtonAction::ToggleMenu,
+            Button,
+            Node {
+                width: Val::Px(32.0),
+                height: Val::Px(32.0),
+                flex_direction: FlexDirection::Column,
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                row_gap: Val::Px(4.0),
+                ..default()
+            },
+            BackgroundColor(Color::NONE),
+            BorderRadius::all(Val::Px(4.0)),
+            children![hamburger_bar(), hamburger_bar(), hamburger_bar()],
+        )],
+    ));
+
+    commands.spawn((
+        Menu,
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(48.0),
+            left: Val::Px(8.0),
+            flex_direction: FlexDirection::Column,
+            padding: UiRect::vertical(Val::Px(4.0)),
+            ..default()
+        },
+        BackgroundColor(MENU_COLOR),
+        BorderRadius::all(Val::Px(4.0)),
+        BoxShadow::new(
+            Color::BLACK.with_alpha(0.8),
+            Val::Px(0.0),
+            Val::Px(2.0),
+            Val::Px(0.0),
+            Val::Px(8.0),
+        ),
+        Visibility::Hidden,
+        // Over the usage hints, which are at the same place.
+        GlobalZIndex(1),
+        children![
+            menu_item(ButtonAction::ShowUsageHints, "How to use"),
+            menu_item(ButtonAction::NewPlanet, "Generate new planet"),
+        ],
+    ));
+
+    commands.spawn((
+        UsageHints,
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Px(48.0),
+            left: Val::Px(8.0),
+            flex_direction: FlexDirection::Column,
+            row_gap: Val::Px(6.0),
+            padding: UiRect::all(Val::Px(8.0)),
+            ..default()
+        },
+        BackgroundColor(PANEL_COLOR),
+        BorderRadius::all(Val::Px(4.0)),
+        children![
+            (
+                Node {
+                    justify_content: JustifyContent::SpaceBetween,
+                    align_items: AlignItems::Center,
+                    ..default()
+                },
+                children![
+                    label("How to use", 14.0),
+                    (
+                        ButtonAction::HideUsageHints,
+                        Button,
+                        Node {
+                            padding: UiRect::horizontal(Val::Px(6.0)),
+                            ..default()
+                        },
+                        BackgroundColor(Color::NONE),
+                        BorderRadius::all(Val::Px(4.0)),
+                        children![label("x", 14.0)],
+                    ),
+                ],
+            ),
+            label(USAGE_HINTS, 13.0),
+        ],
+    ));
+}
+
+/// Spawns the label that `show_generating_planet_label` shows while there's no planet.
+fn spawn_generating_planet_label(mut commands: Commands) {
+    commands.spawn((
+        GeneratingPlanetLabel,
+        label("Generating planet...", 16.0),
+        TextLayout::new_with_justify(JustifyText::Center),
+        Node {
+            position_type: PositionType::Absolute,
+            top: Val::Percent(50.0),
+            width: Val::Percent(100.0),
+            ..default()
+        },
+    ));
+}
+
+fn toggle_menu(mut menu: Single<&mut Visibility, With<Menu>>) {
+    menu.toggle_visible_hidden();
+}
+
+fn close_menu(mut menu: Single<&mut Visibility, With<Menu>>) {
+    menu.set_if_neq(Visibility::Hidden);
+}
+
+fn show_usage_hints(mut hints: Single<&mut Visibility, With<UsageHints>>) {
+    hints.set_if_neq(Visibility::Visible);
+}
+
+fn hide_usage_hints(mut hints: Single<&mut Visibility, With<UsageHints>>) {
+    hints.set_if_neq(Visibility::Hidden);
+}
+
+type ChangedButtonColorsQuery<'w, 's> = Query<
+    'w,
+    's,
+    (&'static Interaction, &'static mut BackgroundColor),
+    (Changed<Interaction>, With<Button>),
+>;
+
+fn highlight_hovered_buttons(mut buttons: ChangedButtonColorsQuery) {
+    for (interaction, mut color) in &mut buttons {
+        color.0 = match interaction {
+            Interaction::None => Color::NONE,
+            Interaction::Hovered | Interaction::Pressed => HOVERED_BUTTON_COLOR,
+        };
+    }
+}
+
+fn show_generating_planet_label(
+    globes: Query<(), With<Globe>>,
+    mut label: Single<&mut Visibility, With<GeneratingPlanetLabel>>,
+) {
+    label.set_if_neq(if globes.is_empty() {
+        Visibility::Inherited
+    } else {
+        Visibility::Hidden
+    });
+}
+
+/// The seeds of new planets are below this. The noise adds the seed to the coordinates as an
+/// `f32`, so a large seed would leave too little precision for the terrain's details.
+const MAX_SEED: u32 = 1000;
+
+/// The globe, the cities and the trains. The rails are in `State`.
+type PlanetEntitiesQuery<'w, 's> =
+    Query<'w, 's, Entity, Or<(With<Globe>, With<City>, With<Train>)>>;
+
+/// Replaces the planet, and everything on it, with a new one with a random seed.
+fn new_planet(
+    mut commands: Commands,
+    mut state: ResMut<State>,
+    mut selected: ResMut<SelectedCity>,
+    mut dijkstra_communication: ResMut<DijkstraCommunication>,
+    entities: PlanetEntitiesQuery,
+    mut camera_transform: Single<&mut Transform, With<MainCamera>>,
+    mut lights_transform: Query<&mut Transform, (With<PointLight>, Without<MainCamera>)>,
+) {
+    for entity in &entities {
+        commands.entity(entity).despawn();
+    }
+    for rail_info in state.rails.rails.values() {
+        commands.entity(rail_info.entity).despawn();
+    }
+    selected.0 = None;
+    // Forget the path being searched for, if any: it's on the old planet.
+    *dijkstra_communication = DijkstraCommunication::new();
+
+    let seed = loop {
+        let seed = rand::rng().random_range(0..MAX_SEED);
+        if seed != state.config.perlin_config.seed {
+            break seed;
+        }
+    };
+    println!("Generating a new planet with seed {seed}.");
+    let mut config = Config::default();
+    config.perlin_config.seed = seed;
+    *state = State::new(config);
+    start_generating_globe(&mut commands, &state.config);
+
+    // Back to the start, which also gets the camera off a train if it was riding one.
+    **camera_transform = camera_start_transform();
+    for mut light_transform in &mut lights_transform {
+        light_transform.translation = LIGHT_START_POSITION;
+    }
 }
 
 fn create_path_if_dijkstra_ready(
@@ -418,7 +731,8 @@ fn create_path_if_dijkstra_ready(
                     return;
                 };
                 let path = bidirectional_dijkstra(prev_city, target_city, &globe_points);
-                sender.send(Some(path)).unwrap();
+                // Fails if a new planet was generated in the meantime. The path isn't needed then.
+                sender.send(Some(path)).ok();
             }
         });
     }
@@ -542,29 +856,40 @@ fn max_step_toward_globe(position: Vec3, direction: Vec3) -> f32 {
     -b - discriminant.sqrt()
 }
 
-fn draw_pointer(pointers: Query<&PointerInteraction>, mut gizmos: Gizmos) {
-    for point in pointers
-        .iter()
-        .filter_map(|interaction| interaction.get_nearest_hit())
-        .filter_map(|(_entity, hit)| hit.position)
-    {
+/// What the pointers point at in the world.
+#[derive(SystemParam)]
+struct WorldPointers<'w, 's> {
+    interactions: Query<'w, 's, &'static PointerInteraction>,
+    ui_nodes: Query<'w, 's, (), With<Node>>,
+}
+
+impl WorldPointers<'_, '_> {
+    /// The nearest entity and point under each pointer. Pointers over the UI are left out: they
+    /// don't point at the world, and the position of a hit on a UI node is within the node.
+    fn hits(&self) -> impl Iterator<Item = (Entity, Vec3)> + '_ {
+        self.interactions
+            .iter()
+            .filter_map(|interaction| interaction.get_nearest_hit())
+            .filter(|(entity, _hit)| !self.ui_nodes.contains(*entity))
+            .filter_map(|(entity, hit)| hit.position.map(|pos| (*entity, pos)))
+    }
+}
+
+fn draw_pointer(pointers: WorldPointers, mut gizmos: Gizmos) {
+    for (_entity, point) in pointers.hits() {
         gizmos.sphere(point, 0.05, RED_500);
     }
 }
 
 fn on_mouse_right_click(
-    pointers: Query<&PointerInteraction>,
+    pointers: WorldPointers,
     state: Res<State>,
     mut commands: Commands,
     cities: Query<(Entity, &Position), With<City>>,
     meshes: Res<Meshes>,
     materials: Res<Materials>,
 ) {
-    for point in pointers
-        .iter()
-        .filter_map(|interaction| interaction.get_nearest_hit())
-        .filter_map(|(_entity, hit)| hit.position)
-    {
+    for (_entity, point) in pointers.hits() {
         let gridpoint = get_closest_gridpoint(point, state.config.grid_size);
         let Ok(globe_points) = state.globe_points.read() else {
             println!("Failed to lock globe points. This should never happen.");
@@ -602,7 +927,7 @@ fn on_mouse_right_click(
 
 #[allow(clippy::too_many_arguments)]
 fn on_mouse_left_click(
-    pointers: Query<&PointerInteraction>,
+    pointers: WorldPointers,
     state: Res<State>,
     mut dijkstra_communication: ResMut<DijkstraCommunication>,
     mut commands: Commands,
@@ -612,15 +937,11 @@ fn on_mouse_left_click(
     trains: Query<(&Train, &Transform), With<Train>>,
     mut camera_transform: Query<(&mut Transform, &MainCamera), Without<Train>>,
 ) {
-    for (clicked_entity, clicked_point) in pointers
-        .iter()
-        .filter_map(|interaction| interaction.get_nearest_hit())
-        .filter_map(|(entity, hit)| hit.position.map(|pos| (entity, pos)))
-    {
-        if let Ok((_train, train_transform)) = trains.get(*clicked_entity) {
+    for (clicked_entity, clicked_point) in pointers.hits() {
+        if let Ok((_train, train_transform)) = trains.get(clicked_entity) {
             let (mut transform, _camera) = camera_transform.single_mut().unwrap();
             move_camera_to_train(&mut transform, train_transform, true);
-            commands.entity(*clicked_entity).insert(SelectedTrain);
+            commands.entity(clicked_entity).insert(SelectedTrain);
             return;
         }
 
@@ -659,7 +980,8 @@ fn on_mouse_left_click(
                                         return;
                                     };
                                     let path = bidirectional_dijkstra(start, end, &globe_points);
-                                    sender.send(Some(path)).unwrap();
+                                    // Fails if a new planet was generated in the meantime.
+                                    sender.send(Some(path)).ok();
                                 }
                             });
                         }
@@ -679,17 +1001,13 @@ fn on_mouse_left_click(
 
 fn highlight_city(
     state: Res<State>,
-    pointers: Query<&PointerInteraction>,
+    pointers: WorldPointers,
     mut commands: Commands,
     cities: Query<(Entity, &Position), With<City>>,
     materials: Res<Materials>,
     selected: Res<SelectedCity>,
 ) {
-    for point in pointers
-        .iter()
-        .filter_map(|interaction| interaction.get_nearest_hit())
-        .filter_map(|(_entity, hit)| hit.position)
-    {
+    for (_entity, point) in pointers.hits() {
         if let Some((entity, _pos)) = cities.iter().find(|(_, pos)| {
             (pos.globe_point.pos - point).length() < state.config.min_city_distance / 2.0
         }) {

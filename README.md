@@ -10,6 +10,9 @@ Run with `cargo run -r`. Startup takes a bit of time, see the progress report in
 
 ## Usage
 
+These controls are also shown in the app, under How to use in the menu (top-left corner). The
+menu can also generate a new planet.
+
 - Drag with left mouse button to rotate the planet.
 - Scroll with the mouse to zoom in and out.
 - Right click to create a city.

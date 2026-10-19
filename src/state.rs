@@ -6,6 +6,7 @@ use crate::dijkstra::{GlobePoints, GridPoint};
 use crate::perlin;
 
 use bevy::prelude::*;
+use rand::SeedableRng;
 
 #[derive(Debug, Clone)]
 pub struct Config {
@@ -70,4 +71,18 @@ pub struct State {
     pub rng: rand::rngs::StdRng,
     pub create_new_city_next: bool,
     pub max_rail_usage: AtomicUsize,
+}
+
+impl State {
+    /// The state for a planet generated with `config`, before it's generated.
+    pub fn new(config: Config) -> Self {
+        Self {
+            globe_points: Arc::new(RwLock::new(GlobePoints::default())),
+            rng: rand::rngs::StdRng::seed_from_u64(config.perlin_config.seed as u64),
+            config,
+            rails: Rails::default(),
+            create_new_city_next: true,
+            max_rail_usage: 0.into(),
+        }
+    }
 }
