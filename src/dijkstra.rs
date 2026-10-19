@@ -1,17 +1,16 @@
 use bevy::math::{Vec2, Vec3};
+use bevy::platform::collections::HashMap;
+use bevy::platform::hash::FixedHasher;
 use bevy::platform::time::Instant;
 use ordered_float::OrderedFloat;
 use priority_queue::PriorityQueue;
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 
 // face index, row, column
 pub type GridPoint = (u32, u32, u32);
 
-pub struct Edge {
-    pub to: GridPoint,
-    pub cost: f32,
-    pub discounted: bool, // true if cost reduction has been applied
-}
+/// How far an edge can reach, in grid steps.
+pub const STEPS: i32 = 7;
 
 #[derive(Debug, Clone, Copy)]
 pub struct GlobePoint {
@@ -20,13 +19,22 @@ pub struct GlobePoint {
     pub penalty: f32,
 }
 
+/// The points of the globe, and the graph on them that paths are searched in.
+///
+/// The edges aren't stored: there are ~60 million of them, which would take too long to build
+/// and too much memory, especially on the web. Instead, they're computed on demand by
+/// `for_each_edge`.
 #[derive(Default)]
 pub struct GlobePoints {
     pub points: HashMap<GridPoint, GlobePoint>,
-    pub graph: HashMap<GridPoint, Vec<Edge>>,
+    pub grid_size: u32,
+    pub climbing_cost: f32,
+    pub reduction_factor: f32, // cost reduction factor for discounted edges
+    /// For each point, the neighbours it has a discounted edge to.
+    pub discounted: HashMap<GridPoint, Vec<GridPoint>>,
 }
 
-fn cubic(grid: GridPoint, size: u32) -> [i32; 3] {
+pub fn cubic(grid: GridPoint, size: u32) -> [i32; 3] {
     let u = grid.1 as i32;
     let v = grid.2 as i32;
     let s = size as i32;
@@ -37,6 +45,35 @@ fn cubic(grid: GridPoint, size: u32) -> [i32; 3] {
         3 => [0, v, u],
         4 => [u, s, s - v],
         5 => [u, 0, v],
+        _ => unreachable!(),
+    }
+}
+
+/// The inverse of `cubic`: the grid point of `face` at cube coordinates `c`.
+fn grid_point(face: u32, c: [i32; 3], size: u32) -> GridPoint {
+    let s = size as i32;
+    let (u, v) = match face {
+        0 => (c[0], c[1]),
+        1 => (s - c[0], c[1]),
+        2 => (s - c[2], c[1]),
+        3 => (c[2], c[1]),
+        4 => (c[0], s - c[2]),
+        5 => (c[0], c[2]),
+        _ => unreachable!(),
+    };
+    (face, u as u32, v as u32)
+}
+
+/// The plane `face` lies in, in cube coordinates: c[axis] == level.
+fn face_plane(face: u32, size: u32) -> (usize, i32) {
+    let s = size as i32;
+    match face {
+        0 => (2, s),
+        1 => (2, 0),
+        2 => (0, s),
+        3 => (0, 0),
+        4 => (1, s),
+        5 => (1, 0),
         _ => unreachable!(),
     }
 }
@@ -52,94 +89,73 @@ fn cost(p: &GlobePoint, q: &GlobePoint, climbing_cost: f32) -> f32 {
 }
 
 impl GlobePoints {
-    pub fn build_graph(&mut self, grid_size: u32, climbing_cost: f32) {
-        let steps = 7i32;
-        let size = grid_size as i32;
-        let mut edges = 0;
-        for (pts_done, (&grid, &p)) in self.points.iter().enumerate() {
-            if pts_done % 10000 == 0 {
-                println!(
-                    "Building graph: {}/{}, edges {}",
-                    pts_done,
-                    self.points.len(),
-                    edges
-                );
+    /// Calls `f` with each neighbour of `from`: every other grid point within `STEPS` of it,
+    /// measured in cube coordinates, on its own face or on a neighbouring one.
+    pub fn for_each_neighbor(&self, from: GridPoint, mut f: impl FnMut(GridPoint)) {
+        let size = self.grid_size as i32;
+        let this = cubic(from, self.grid_size);
+        for face in 0..6 {
+            // Only faces whose plane is within `STEPS` of us can have neighbours: always our own
+            // face, and the faces next to us if we're near an edge.
+            let (axis, level) = face_plane(face, self.grid_size);
+            let d = level - this[axis];
+            let radius2 = STEPS * STEPS - d * d;
+            if radius2 < 0 {
+                continue;
             }
-            for di in -steps..=steps {
-                for dj in -steps..=steps {
-                    if di == 0 && dj == 0 {
+            let (a, b) = ((axis + 1) % 3, (axis + 2) % 3);
+            for da in -STEPS..=STEPS {
+                for db in -STEPS..=STEPS {
+                    // Skip ourselves, and our copy on the other face if we're on an edge.
+                    if da * da + db * db > radius2 || (d, da, db) == (0, 0, 0) {
                         continue;
                     }
-                    if di * di + dj * dj > steps * steps {
-                        continue;
-                    }
-                    let neighbor = (
-                        grid.0,
-                        (grid.1 as i32 + di) as u32,
-                        (grid.2 as i32 + dj) as u32,
-                    );
-                    if let Some(&q) = self.points.get(&neighbor) {
-                        self.graph.entry(grid).or_default().push(Edge {
-                            to: neighbor,
-                            cost: cost(&p, &q, climbing_cost),
-                            discounted: false,
-                        });
-                        edges += 1;
+                    let mut c = this;
+                    c[axis] = level;
+                    c[a] += da;
+                    c[b] += db;
+                    if (0..=size).contains(&c[a]) && (0..=size).contains(&c[b]) {
+                        f(grid_point(face, c, self.grid_size));
                     }
                 }
             }
-            if !(grid.1 as i32 >= steps
-                && (grid.1 as i32) <= size - steps
-                && grid.2 as i32 >= steps
-                && (grid.2 as i32) <= size - steps)
-            {
-                // We're within `steps` of the edge of a face, and we want to step at most `steps` far,
-                // so the next point is either on our face, within steps of us (checked above), or on a
-                // different face, within `steps`` of the edge that face.
-                let this = cubic(grid, grid_size);
-                for big in 0..=grid_size as i32 {
-                    for small in 0..=steps {
-                        for which_edge in 0..4 {
-                            for other_face in 0..6 {
-                                if other_face == grid.0 {
-                                    continue; // skip the same face
-                                }
-                                let neighbor = (
-                                    other_face,
-                                    match which_edge {
-                                        0 => small,
-                                        1 => grid_size as i32 - small,
-                                        2 => big,
-                                        3 => grid_size as i32 - big,
-                                        _ => unreachable!(),
-                                    } as u32,
-                                    match which_edge {
-                                        0 => big,
-                                        1 => grid_size as i32 - big,
-                                        2 => small,
-                                        3 => grid_size as i32 - small,
-                                        _ => unreachable!(),
-                                    } as u32,
-                                );
-                                let other = cubic(neighbor, grid_size);
-                                let dist2 = (other[0] - this[0]).pow(2)
-                                    + (other[1] - this[1]).pow(2)
-                                    + (other[2] - this[2]).pow(2);
-                                if dist2 > steps * steps || dist2 == 0 {
-                                    continue;
-                                }
-                                if let Some(q) = self.points.get(&neighbor) {
-                                    self.graph.entry(grid).or_default().push(Edge {
-                                        to: neighbor,
-                                        cost: cost(&p, q, climbing_cost),
-                                        discounted: false,
-                                    });
-                                    edges += 1;
-                                }
-                            }
-                        }
-                    }
+        }
+    }
+
+    /// Calls `f` with each neighbour `to` of `from` for which `skip(to)` is false, and the cost of
+    /// the edge to it. Computing the cost is relatively slow, especially on the web, so callers
+    /// should skip the neighbours they don't need.
+    pub fn for_each_edge(
+        &self,
+        from: GridPoint,
+        skip: impl Fn(GridPoint) -> bool,
+        mut f: impl FnMut(GridPoint, f32),
+    ) {
+        let Some(p) = self.points.get(&from) else {
+            return;
+        };
+        let discounted = self.discounted.get(&from);
+        self.for_each_neighbor(from, |to| {
+            if skip(to) {
+                return;
+            }
+            if let Some(q) = self.points.get(&to) {
+                let mut cost = cost(p, q, self.climbing_cost);
+                if discounted.is_some_and(|d| d.contains(&to)) {
+                    cost /= self.reduction_factor;
                 }
+                f(to, cost);
+            }
+        });
+    }
+
+    /// Makes the edge between `a` and `b` cheaper in both directions. Discounting an edge again
+    /// has no further effect.
+    pub fn discount_edge(&mut self, a: GridPoint, b: GridPoint) {
+        for (from, to) in [(a, b), (b, a)] {
+            let neighbors = self.discounted.entry(from).or_default();
+            if !neighbors.contains(&to) {
+                neighbors.push(to);
             }
         }
     }
@@ -153,7 +169,8 @@ pub fn dijkstra(start: GridPoint, end: GridPoint, globe_points: &GlobePoints) ->
 
     let start_time = Instant::now();
 
-    let mut queue = PriorityQueue::new();
+    let mut queue: PriorityQueue<GridPoint, OrderedFloat<f32>, FixedHasher> =
+        PriorityQueue::with_default_hasher();
     let mut visited = HashMap::new();
     let mut come_from = HashMap::new();
     queue.push(start, OrderedFloat(0.0));
@@ -165,21 +182,20 @@ pub fn dijkstra(start: GridPoint, end: GridPoint, globe_points: &GlobePoints) ->
         if current == end {
             break;
         }
-        if let Some(edges) = globe_points.graph.get(&current) {
-            for edge in edges {
-                if visited.contains_key(&edge.to) {
-                    continue;
+        globe_points.for_each_edge(
+            current,
+            |to| visited.contains_key(&to),
+            |to, cost| {
+                let new_neg_dist = current_dist - OrderedFloat(cost);
+                if queue.get_priority(&to).is_none() {
+                    queue.push(to, new_neg_dist);
+                    come_from.insert(to, current);
+                } else if new_neg_dist > *queue.get_priority(&to).unwrap() {
+                    queue.change_priority(&to, new_neg_dist);
+                    come_from.insert(to, current);
                 }
-                let new_neg_dist = current_dist - OrderedFloat(edge.cost);
-                if queue.get_priority(&edge.to).is_none() {
-                    queue.push(edge.to, new_neg_dist);
-                    come_from.insert(edge.to, current);
-                } else if new_neg_dist > *queue.get_priority(&edge.to).unwrap() {
-                    queue.change_priority(&edge.to, new_neg_dist);
-                    come_from.insert(edge.to, current);
-                }
-            }
-        }
+            },
+        );
     }
     let mut path = Vec::new();
     let mut current = end;
@@ -243,7 +259,8 @@ pub fn bidirectional_dijkstra(
 
 
     // Priority queue for both directions
-    let mut queue: PriorityQueue<NodeInfo, Priority> = PriorityQueue::new();
+    let mut queue: PriorityQueue<NodeInfo, Priority, FixedHasher> =
+        PriorityQueue::with_default_hasher();
     let mut visited_start: HashMap<GridPoint, Option<GridPoint>> = HashMap::new();
     let mut visited_end: HashMap<GridPoint, Option<GridPoint>> = HashMap::new();
 
@@ -293,22 +310,22 @@ pub fn bidirectional_dijkstra(
         }
 
         // Process neighbors
-        if let Some(edges) = globe_points.graph.get(&current) {
-            for edge in edges {
+        globe_points.for_each_edge(
+            current,
+            |to| this_visited.contains_key(&to),
+            |to, cost| {
                 let neighbor_info = NodeInfo {
-                    node: edge.to,
+                    node: to,
                     from_start: current_info.from_start,
                 };
-                let new_neg_dist = current_prio.dist - OrderedFloat(edge.cost);
+                let new_neg_dist = current_prio.dist - OrderedFloat(cost);
                 let new_prio = Priority {
                     dist: new_neg_dist,
                     prev: Some(current),
                 };
-                if !this_visited.contains_key(&edge.to) {
-                    queue.push_increase(neighbor_info, new_prio.clone());
-                }
-            }
-        }
+                queue.push_increase(neighbor_info, new_prio);
+            },
+        );
     }
 
     let mut path = VecDeque::new();
