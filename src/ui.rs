@@ -727,7 +727,7 @@ fn create_path_if_dijkstra_ready(
             move || {
                 let Ok(globe_points) = globe_points_lock.read() else {
                     println!("Failed to lock globe points. This should never happen.");
-                    sender.send(None).unwrap();
+                    sender.send(None).ok();
                     return;
                 };
                 let path = bidirectional_dijkstra(prev_city, target_city, &globe_points);
@@ -976,7 +976,7 @@ fn on_mouse_left_click(
                                         println!(
                                             "Failed to lock globe points. This should never happen."
                                         );
-                                        sender.send(None).unwrap();
+                                        sender.send(None).ok();
                                         return;
                                     };
                                     let path = bidirectional_dijkstra(start, end, &globe_points);
