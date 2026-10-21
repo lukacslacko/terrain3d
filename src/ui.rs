@@ -31,7 +31,7 @@ impl Plugin for OverlayPlugin {
 }
 
 const USAGE_HINTS: &str = "\
-Left drag: rotate the planet
+Left or right drag: rotate the planet
 Scroll: zoom in and out
 Right click: create a city
 Left click two cities: connect them
