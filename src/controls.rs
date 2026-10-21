@@ -22,7 +22,8 @@ impl Plugin for ControlsPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             FixedUpdate,
-            rotate_on_drag.run_if(input_pressed(MouseButton::Left)),
+            rotate_on_drag
+                .run_if(input_pressed(MouseButton::Left).or(input_pressed(MouseButton::Right))),
         )
         .add_systems(FixedUpdate, look_around_on_drag.run_if(ctrl_pressed))
         .add_systems(Update, zoom_with_scroll)
@@ -34,9 +35,10 @@ impl Plugin for ControlsPlugin {
             )
                 .chain(),
         )
+        .insert_resource(RightDragDistance::default())
         .add_systems(
             Update,
-            on_mouse_right_click.run_if(input_just_pressed(MouseButton::Right)),
+            (track_right_drag, on_mouse_right_click.run_if(right_clicked)).chain(),
         )
         .add_systems(
             Update,
@@ -65,6 +67,38 @@ fn ctrl_pressed(
 
 #[derive(Resource, Default)]
 struct SelectedCity(Option<Entity>);
+
+/// How far the mouse has moved since the right button was last pressed.
+#[derive(Resource, Default)]
+struct RightDragDistance(f32);
+
+/// Releasing the right button after moving the mouse at most this far since pressing it is a
+/// click; after moving farther, it ends a drag that rotated the planet.
+const MAX_CLICK_DISTANCE: f32 = 5.0;
+
+fn track_right_drag(
+    mouse_buttons: Res<ButtonInput<MouseButton>>,
+    mut motion_event_reader: EventReader<MouseMotion>,
+    mut distance: ResMut<RightDragDistance>,
+) {
+    let moved: f32 = motion_event_reader
+        .read()
+        .map(|event| event.delta.length())
+        .sum();
+    if mouse_buttons.just_pressed(MouseButton::Right) {
+        distance.0 = 0.0;
+    } else {
+        distance.0 += moved;
+    }
+}
+
+/// A run condition that is true when the right button was just released without dragging.
+fn right_clicked(
+    mouse_buttons: Res<ButtonInput<MouseButton>>,
+    distance: Res<RightDragDistance>,
+) -> bool {
+    mouse_buttons.just_released(MouseButton::Right) && distance.0 <= MAX_CLICK_DISTANCE
+}
 
 type CameraTransformQuery<'w, 's> =
     Query<'w, 's, &'static mut Transform, (With<MainCamera>, Without<Train>)>;

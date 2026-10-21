@@ -18,7 +18,10 @@ impl Plugin for OverlayPlugin {
                             .and(not(button_pressed(ButtonAction::ToggleMenu))),
                     ),
                     show_usage_hints.run_if(button_pressed(ButtonAction::ShowUsageHints)),
-                    hide_usage_hints.run_if(button_pressed(ButtonAction::HideUsageHints)),
+                    hide_usage_hints.run_if(
+                        button_pressed(ButtonAction::HideUsageHints)
+                            .or(button_pressed(ButtonAction::ToggleMenu)),
+                    ),
                     request_new_planet.run_if(button_pressed(ButtonAction::NewPlanet)),
                     highlight_hovered_buttons,
                     show_generating_planet_label,
@@ -28,7 +31,7 @@ impl Plugin for OverlayPlugin {
 }
 
 const USAGE_HINTS: &str = "\
-Left drag: rotate the planet
+Left or right drag: rotate the planet
 Scroll: zoom in and out
 Right click: create a city
 Left click two cities: connect them

@@ -4,6 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>terrain3d WebGL</title>
+    <style>
+        /* The app's canvas fills the body (fit_canvas_to_parent), so make the body fill the
+           browser window. */
+        html, body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+            /* The canvas has focus while the app runs; don't outline the whole window. */
+            outline: none;
+        }
+    </style>
 </head>
 <body>
     <!-- trunk injects the script that loads terrain3d.js and the wasm. -->

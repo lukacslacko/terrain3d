@@ -15,6 +15,9 @@ fn main() {
             DefaultPlugins.set(WindowPlugin {
                 primary_window: Some(Window {
                     resolution: WindowResolution::new(600., 600.),
+                    // On the web, fill the page instead; index.html makes the page fill the
+                    // browser window.
+                    fit_canvas_to_parent: true,
                     ..default()
                 }),
                 ..default()
