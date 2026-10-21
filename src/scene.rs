@@ -364,6 +364,8 @@ fn create_path_if_dijkstra_ready(
 
     // spawn a train at the first point of the path
     if let Some(mut train) = Train::new(train_transforms) {
+        // The train only leaves its first rail, it doesn't come in on it.
+        train.count_current_rail(1, &state, &mut commands, &mut materials);
         let first_transform = train.current_transform();
         commands.spawn((
             train,

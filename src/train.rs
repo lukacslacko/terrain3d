@@ -109,6 +109,31 @@ impl Train {
         }
     }
 
+    /// Counts the train passing the rail it's currently on `passes` times, and colors the rail by
+    /// how much it's used.
+    pub fn count_current_rail(
+        &self,
+        passes: usize,
+        state: &State,
+        commands: &mut Commands,
+        materials: &mut Assets<StandardMaterial>,
+    ) {
+        let rail_info = state.rails.rails.get(&self.transforms[self.idx].1).unwrap();
+        let count = rail_info.counter.fetch_add(passes, Ordering::Relaxed) + passes;
+        let max_rail_usage = count.max(state.max_rail_usage.fetch_max(count, Ordering::Relaxed));
+        let color = (((max_rail_usage - count) as f32 / max_rail_usage as f32) * 255.) as u8;
+        let material = materials.add(StandardMaterial {
+            base_color: Color::srgb_u8(255, color, color),
+            perceptual_roughness: 0.0,
+            metallic: 0.0,
+            ..default()
+        });
+
+        commands
+            .entity(rail_info.entity)
+            .insert((MeshMaterial3d(material),));
+    }
+
     pub fn update(
         &mut self,
         transform: &mut Transform,
@@ -125,49 +150,28 @@ impl Train {
         if self.seconds_spent_within_segment >= self.segment_duration.unwrap() {
             // Move to the next segment.
             self.idx = self.next_idx;
-
-            let rail_info = state.rails.rails.get(&self.transforms[self.idx].1).unwrap();
-
-            let count = rail_info.counter.fetch_add(1, Ordering::Relaxed) + 1;
-
-            let max_rail_usage =
-                count.max(state.max_rail_usage.fetch_max(count, Ordering::Relaxed));
-
-            let color = (((max_rail_usage - count) as f32 / max_rail_usage as f32) * 255.) as u8;
-
-            let material = materials.add(StandardMaterial {
-                base_color: Color::srgb_u8(255, color, color),
-                perceptual_roughness: 0.0,
-                metallic: 0.0,
-                ..default()
-            });
-
-            commands
-                .entity(rail_info.entity)
-                .insert((MeshMaterial3d(material),));
+            let at_end = if self.forward {
+                self.idx == self.transforms.len() - 1
+            } else {
+                self.idx == 0
+            };
+            // At either end of the path the train turns around, so it passes the rail twice: in
+            // and back out. Otherwise the end rails would only get half the traffic of the others.
+            let passes = if at_end { 2 } else { 1 };
+            self.count_current_rail(passes, state, commands, materials);
 
             // Account for the remaining time.
             self.seconds_spent_within_segment =
                 self.segment_duration.unwrap() - self.seconds_spent_within_segment;
 
-            if self.forward {
-                if self.idx < self.transforms.len() - 1 {
-                    self.next_idx += 1;
-                } else {
-                    // Reached the end, reverse direction
-                    self.forward = false;
-                    self.next_idx -= 1; // Set next_idx to the last valid index
-                }
-            } else {
-                // backward
-                if self.idx > 0 {
-                    self.next_idx -= 1;
-                } else {
-                    // Reached the start, reverse direction
-                    self.forward = true;
-                    self.next_idx += 1; // Set next_idx to the first valid index
-                }
+            if at_end {
+                self.forward = !self.forward;
             }
+            self.next_idx = if self.forward {
+                self.idx + 1
+            } else {
+                self.idx - 1
+            };
             self.compute_segment_duration();
         }
 
