@@ -4,6 +4,10 @@ A simple 3D app with a small planet with generated terrain, where you can place 
 
 The terrain is generated using Perlin noise. The connections are calculated by the bidirectional version of Dijkstra's algorithm, and elevation change is taken into account in the edge weights.
 
+## Try it
+
+Try it here: https://lukacslacko.github.io/terrain3d/. 
+
 ## Run locally
 
 Run with `cargo run -r`. Startup takes a bit of time, see the progress report in the console.
